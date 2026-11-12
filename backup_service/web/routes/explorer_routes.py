@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
 from typing import Optional
 
-from backup_service.web.routes.auth_routes import require_auth
+from backup_service.web.routes.auth_routes import require_auth, require_operator_or_admin
 from backup_service.drivers.explorer import DirectoryExplorer
 from backup_service.drivers.db_checker import DatabaseChecker
 from backup_service.config.settings import SSHConfig
@@ -16,7 +16,7 @@ async def browse_server_directory(
     server_id: int,
     request: Request,
     path: str = Query("/", description="Target directory to explore"),
-    user: dict = Depends(require_auth)
+    user: dict = Depends(require_operator_or_admin)
 ):
     """Browse server filesystem interactively with OWASP traversal protection."""
     db = request.app.state.db_manager
@@ -30,6 +30,10 @@ async def browse_server_directory(
 
     if server["mode"] == "local":
         result = DirectoryExplorer.explore_local(path)
+        result["server_id"] = server_id
+        result["server_name"] = server["name"]
+        result["server_mode"] = "local"
+        result["server_label"] = f"Local Host Process ({server['name']})"
         return result
 
     elif server["mode"] == "ssh":
@@ -51,6 +55,10 @@ async def browse_server_directory(
             timeout_seconds=15
         )
         result = DirectoryExplorer.explore_remote_ssh(ssh_cfg, path)
+        result["server_id"] = server_id
+        result["server_name"] = server["name"]
+        result["server_mode"] = "ssh"
+        result["server_label"] = f"Remote SSH Server ({server['username']}@{server['host']}:{server['port']})"
         return result
 
     else:

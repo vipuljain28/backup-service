@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Enterprise Backup & Disaster Recovery</title>
+  <title>Login - Application Backup by TechLIMS</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
   <style>
     body { background: radial-gradient(circle at top, #1e293b, #0f172a); }
@@ -12,8 +15,13 @@
 <body class="min-h-screen flex items-center justify-center p-4">
   <div class="max-w-md w-full bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 text-white">
     <div class="text-center mb-8">
-      <h1 class="text-3xl font-extrabold tracking-wider">LIMS<span class="text-blue-500">BACKUP</span></h1>
-      <p class="text-gray-400 text-sm mt-1">Enterprise Backup & Disaster Recovery Platform</p>
+      <div class="flex justify-center mb-4">
+        <div class="p-3 bg-white bg-opacity-95 rounded-xl shadow-lg border border-gray-700 max-w-[260px]">
+          <img src="/static/techlims_logo.png" alt="TechLIMS" class="h-10 object-contain mx-auto">
+        </div>
+      </div>
+      <h1 class="text-lg font-bold tracking-wider text-white">Application Backup by <span class="text-blue-400">TechLIMS</span></h1>
+      <p class="text-gray-400 text-xs mt-1">Enterprise Automated Cloud & Disaster Recovery Platform</p>
     </div>
 
     {% if error %}
@@ -59,6 +67,11 @@
         </a>
       </div>
       <p class="text-[10px] text-gray-500 mt-2">Protected by AES-256-GCM Vault & OWASP Compliant RBAC</p>
+      <div class="pt-1">
+        <a href="/branding" class="text-[11px] text-gray-500 hover:text-blue-400 underline transition">
+          Application Branding, Privacy Policy & Google OAuth Disclosures ➔
+        </a>
+      </div>
     </div>
   </div>
 </body>

@@ -16,6 +16,34 @@ from backup_service.config.settings import SSHConfig
 
 logger = logging.getLogger("backup_service.explorer")
 
+# OWASP Information Exposure Defense: sensitive system & credential files that must not be exposed
+RESTRICTED_FILENAMES = {
+    ".vault_key", "metadata.sqlite", "metadata.sqlite-wal", "metadata.sqlite-shm",
+    ".env", ".env.local", ".env.production",
+    "id_rsa", "id_rsa.pub", "id_ed25519", "id_ed25519.pub", "id_dsa", "id_ecdsa",
+    "authorized_keys", "known_hosts",
+    "shadow", "gshadow", "sudoers", "master.key",
+    "token.json", "credentials.json", "client_secret.json"
+}
+
+RESTRICTED_EXTENSIONS = {
+    ".key", ".pem", ".pfx", ".p12", ".kdbx"
+}
+
+
+def is_sensitive_path_or_file(name: str, full_path: str = "") -> bool:
+    """Check if file or path contains sensitive cryptographic credentials or system secrets."""
+    lower_name = name.lower().strip()
+    if lower_name in RESTRICTED_FILENAMES:
+        return True
+    for ext in RESTRICTED_EXTENSIONS:
+        if lower_name.endswith(ext):
+            return True
+    clean_p = full_path.replace("\\", "/").lower()
+    if "/etc/shadow" in clean_p or "/etc/sudoers" in clean_p:
+        return True
+    return False
+
 
 def sanitize_path(requested_path: str) -> str:
     """Sanitize and normalize path to prevent OWASP directory traversal exploits.
@@ -96,6 +124,9 @@ class DirectoryExplorer:
         try:
             with os.scandir(str(norm_path)) as it:
                 for entry in it:
+                    # Defense-in-depth: Never expose sensitive credential/vault files in directory explorer
+                    if is_sensitive_path_or_file(entry.name, entry.path):
+                        continue
                     try:
                         is_dir = entry.is_dir(follow_symlinks=False)
                         st = entry.stat(follow_symlinks=False)
@@ -163,6 +194,9 @@ class DirectoryExplorer:
                 is_dir = stat.S_ISDIR(attr.st_mode)
                 item_name = attr.filename
                 full_item_path = f"{clean_path.rstrip('/')}/{item_name}"
+                # Defense-in-depth: Never expose sensitive credential/vault files in directory explorer
+                if is_sensitive_path_or_file(item_name, full_item_path):
+                    continue
                 items.append({
                     "name": item_name,
                     "path": full_item_path,

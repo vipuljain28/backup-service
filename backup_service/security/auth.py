@@ -29,6 +29,21 @@ def hash_password(password: str) -> str:
     return f"pbkdf2_sha256${HASH_ITERATIONS}${salt_b64}${key_b64}"
 
 
+def validate_password_strength(password: str) -> tuple[bool, Optional[str]]:
+    """Enforce OWASP/NIST SP 800-63B password complexity standards."""
+    if not password or len(password) < 8:
+        return False, "Password must be at least 8 characters long."
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter."
+    if not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter."
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one numerical digit."
+    if not any(c in "!@#$%^&*()-_=+[]{}|;:,.<>?/~`" for c in password):
+        return False, "Password must contain at least one special character."
+    return True, None
+
+
 def verify_password(password: str, hashed_value: str) -> bool:
     """Verify password against stored PBKDF2 hash using constant-time comparison."""
     try:

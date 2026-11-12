@@ -30,6 +30,8 @@ from backup_service.web.routes import (
     backup_routes, restore_routes, system_routes
 )
 
+from urllib.parse import urlparse
+
 logger = logging.getLogger("backup_service.web")
 WEB_DIR = Path(__file__).parent.resolve()
 
@@ -43,14 +45,74 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        response.headers["Server"] = "TechLIMS-Security-Gateway"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.jsdelivr.net data:; "
-            "img-src 'self' data: https:;"
+            "img-src 'self' data: https:; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none';"
         )
+
+        # Anti-Caching for sensitive APIs and Authentication endpoints (CWE-524)
+        path = request.url.path
+        if path.startswith("/api/") or path in ("/login", "/logout"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+            response.headers["Pragma"] = "no-cache"
+
         return response
+
+
+class CSRFOriginMiddleware(BaseHTTPMiddleware):
+    """OWASP Anti-CSRF Origin and Referer Header Verification Middleware.
+    
+    Validates that state-mutating requests (POST, PUT, DELETE, PATCH) originate
+    from the genuine application host and not third-party malicious sites.
+    """
+
+    MUTATING_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method in self.MUTATING_METHODS:
+            host_header = request.headers.get("host", "").split(":")[0].lower()
+            origin = request.headers.get("origin")
+            referer = request.headers.get("referer")
+
+            if origin:
+                origin_host = urlparse(origin).hostname
+                if origin_host and origin_host.lower() != host_header:
+                    # Allow localhost <-> 127.0.0.1 interchangeability in development
+                    if not (host_header in ("127.0.0.1", "localhost") and origin_host in ("127.0.0.1", "localhost")):
+                        logger.warning(
+                            "CSRF Origin mismatch blocked: Origin=%s, Host=%s from %s",
+                            origin, host_header, request.client.host if request.client else "unknown"
+                        )
+                        return Response(
+                            content='{"detail": "CSRF validation failed: Origin header mismatch"}',
+                            status_code=403,
+                            media_type="application/json"
+                        )
+            elif referer:
+                referer_host = urlparse(referer).hostname
+                if referer_host and referer_host.lower() != host_header:
+                    if not (host_header in ("127.0.0.1", "localhost") and referer_host in ("127.0.0.1", "localhost")):
+                        logger.warning(
+                            "CSRF Referer mismatch blocked: Referer=%s, Host=%s from %s",
+                            referer, host_header, request.client.host if request.client else "unknown"
+                        )
+                        return Response(
+                            content='{"detail": "CSRF validation failed: Referer header mismatch"}',
+                            status_code=403,
+                            media_type="application/json"
+                        )
+
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -89,6 +151,7 @@ def create_app() -> FastAPI:
 
     # Mount Middleware
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(CSRFOriginMiddleware)
 
     # Static Assets & Templates
     static_dir = WEB_DIR / "static"

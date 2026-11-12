@@ -219,9 +219,30 @@ def _execute_backup_task(app_state, client_id_num: int, trigger_type: str = "man
 
 @router.get("/backups")
 async def backups_page(request: Request, user: dict = Depends(require_auth)):
+    from apscheduler.triggers.cron import CronTrigger
+
     db = request.app.state.db_manager
     jobs = db.list_backup_jobs(limit=50)
     clients = db.list_clients()
+    schedules = db.list_all_schedules()
+
+    now_utc = datetime.now(timezone.utc)
+    for s in schedules:
+        cron_expr = s.get("cron_expression", "").strip()
+        parts = cron_expr.split()
+        if len(parts) == 5 and s.get("is_enabled"):
+            try:
+                trigger = CronTrigger(
+                    minute=parts[0], hour=parts[1], day=parts[2],
+                    month=parts[3], day_of_week=parts[4], timezone="UTC"
+                )
+                nxt = trigger.get_next_fire_time(None, now_utc)
+                s["next_run_formatted"] = nxt.strftime("%Y-%m-%d %H:%M:%S UTC") if nxt else "N/A"
+            except Exception:
+                s["next_run_formatted"] = "Invalid Cron"
+        else:
+            s["next_run_formatted"] = "Paused / Disabled" if not s.get("is_enabled") else "N/A"
+
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request=request,
@@ -230,9 +251,174 @@ async def backups_page(request: Request, user: dict = Depends(require_auth)):
             "user": user,
             "jobs": jobs,
             "clients": clients,
+            "schedules": schedules,
+            "server_time_utc": now_utc.strftime("%Y-%m-%d %H:%M:%S UTC"),
             "active_tab": "backups"
         }
     )
+
+
+@router.post("/schedules/add")
+async def add_schedule(
+    request: Request,
+    user: dict = Depends(require_auth),
+    client_id: int = Form(...),
+    name: str = Form(...),
+    schedule_type: str = Form("daily"), # "daily", "twice_daily", "hourly", "weekly", "custom"
+    daily_time: Optional[str] = Form("02:00"), # HH:MM
+    hourly_interval: Optional[int] = Form(4),
+    weekly_day: Optional[str] = Form("0"), # 0 = Sun
+    weekly_time: Optional[str] = Form("03:00"),
+    custom_cron: Optional[str] = Form(None)
+):
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+
+    # Build cron expression from friendly form fields
+    if schedule_type == "daily":
+        parts = (daily_time or "02:00").split(":")
+        minute = int(parts[1]) if len(parts) > 1 else 0
+        hour = int(parts[0]) if len(parts) > 0 else 2
+        cron_expr = f"{minute} {hour} * * *"
+    elif schedule_type == "twice_daily":
+        parts = (daily_time or "02:00").split(":")
+        minute = int(parts[1]) if len(parts) > 1 else 0
+        hour1 = int(parts[0]) if len(parts) > 0 else 2
+        hour2 = (hour1 + 12) % 24
+        cron_expr = f"{minute} {hour1},{hour2} * * *"
+    elif schedule_type == "hourly":
+        interval = max(1, min(24, int(hourly_interval or 4)))
+        cron_expr = f"0 */{interval} * * *"
+    elif schedule_type == "weekly":
+        parts = (weekly_time or "03:00").split(":")
+        minute = int(parts[1]) if len(parts) > 1 else 0
+        hour = int(parts[0]) if len(parts) > 0 else 3
+        day = weekly_day or "0"
+        cron_expr = f"{minute} {hour} * * {day}"
+    elif schedule_type == "custom":
+        cron_expr = (custom_cron or "").strip()
+        if len(cron_expr.split()) != 5:
+            raise HTTPException(status_code=400, detail="Custom cron expression must contain exactly 5 space-separated fields (minute hour day month day_of_week)")
+    else:
+        cron_expr = "0 2 * * *"
+
+    sched_id = db.add_backup_schedule(
+        client_id=client_id,
+        name=name.strip(),
+        cron_expression=cron_expr,
+        is_enabled=1
+    )
+
+    if hasattr(request.app.state, "scheduler") and request.app.state.scheduler:
+        request.app.state.scheduler.reload_schedules()
+
+    request.app.state.audit_logger.log(
+        action="ADD_SCHEDULE",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="backup_schedule",
+        resource_id=str(sched_id),
+        details={"client_id": client_id, "name": name, "cron": cron_expr}
+    )
+    return RedirectResponse(url="/backups", status_code=303)
+
+
+@router.post("/schedules/{schedule_id}/toggle")
+async def toggle_schedule(
+    schedule_id: int,
+    request: Request,
+    user: dict = Depends(require_auth),
+    is_enabled: int = Form(...)
+):
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    db.toggle_backup_schedule(schedule_id, is_enabled)
+
+    if hasattr(request.app.state, "scheduler") and request.app.state.scheduler:
+        request.app.state.scheduler.reload_schedules()
+
+    request.app.state.audit_logger.log(
+        action="TOGGLE_SCHEDULE",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="backup_schedule",
+        resource_id=str(schedule_id),
+        details={"is_enabled": is_enabled}
+    )
+    return RedirectResponse(url="/backups", status_code=303)
+
+
+@router.post("/schedules/{schedule_id}/delete")
+async def delete_schedule(
+    schedule_id: int,
+    request: Request,
+    user: dict = Depends(require_auth)
+):
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    db.delete_backup_schedule(schedule_id)
+
+    if hasattr(request.app.state, "scheduler") and request.app.state.scheduler:
+        request.app.state.scheduler.reload_schedules()
+
+    request.app.state.audit_logger.log(
+        action="DELETE_SCHEDULE",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="backup_schedule",
+        resource_id=str(schedule_id),
+        details={"schedule_id": schedule_id}
+    )
+    return RedirectResponse(url="/backups", status_code=303)
+
+
+@router.post("/schedules/{schedule_id}/run-now")
+async def run_schedule_now(
+    schedule_id: int,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_auth)
+):
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    sched = db.get_backup_schedule(schedule_id)
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    client_id = sched["client_id"]
+    client_row = db.get_client(client_id)
+    if not client_row:
+        raise HTTPException(status_code=404, detail="Client tenant not found")
+
+    now_utc = datetime.now(timezone.utc)
+    job_id = db.record_backup_job(
+        client_id=client_id,
+        trigger_type="scheduled",
+        status="running",
+        run_date=now_utc.strftime("%Y-%m-%d"),
+        run_timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S"),
+        is_dry_run=0
+    )
+
+    background_tasks.add_task(_execute_backup_task, request.app.state, client_id, "scheduled", False, job_id)
+
+    request.app.state.audit_logger.log(
+        action="TRIGGER_SCHEDULED_RUN",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="backup_schedule",
+        resource_id=str(schedule_id),
+        details={"job_id": job_id, "client_id": client_id}
+    )
+    return RedirectResponse(url=f"/backups?active_job={job_id}", status_code=303)
 
 
 @router.post("/backups/trigger")

@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Enterprise Backup & Disaster Recovery{% endblock %}</title>
+  <title>{% block title %}Enterprise Backup & Disaster Recovery{% endblock %} - Application Backup by TechLIMS</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
   <style>
     .bg-sidebar { background-color: #0f172a; }
@@ -15,8 +18,11 @@
   <!-- Sidebar -->
   <aside class="w-64 bg-sidebar text-gray-300 flex flex-col justify-between shadow-xl flex-shrink-0">
     <div>
-      <div class="h-16 flex items-center px-6 bg-gray-900 border-b border-gray-800">
-        <span class="text-xl font-bold tracking-wider text-white">LIMS<span class="text-blue-500">BACKUP</span></span>
+      <div class="h-16 flex items-center px-4 bg-gray-900 border-b border-gray-800">
+        <a href="/" class="flex items-center space-x-2">
+          <img src="/static/techlims_logo.png" alt="TechLIMS" class="h-7 max-w-full object-contain">
+          <span class="text-[10px] font-bold tracking-wider text-blue-400 font-mono bg-blue-900 bg-opacity-40 px-1.5 py-0.5 rounded border border-blue-800">BACKUP</span>
+        </a>
       </div>
       <nav class="mt-6 px-4 space-y-1">
         <a href="/" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'dashboard' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">

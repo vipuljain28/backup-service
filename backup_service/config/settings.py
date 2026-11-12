@@ -43,6 +43,21 @@ class DatabaseConfig(BaseModel):
         engine = info.data.get("engine", "mysql")
         return 5432 if engine == "postgres" else 3306
 
+    @field_validator("db_name")
+    @classmethod
+    def validate_db_name(cls, v: str):
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", v):
+            raise ValueError(f"Invalid database name '{v}': must only contain letters, numbers, underscores, and dashes.")
+        return v
+
+    @field_validator("dump_options")
+    @classmethod
+    def validate_dump_options(cls, v: List[str]):
+        for opt in v:
+            if not re.match(r"^--?[a-zA-Z0-9_\-=]+$", opt.strip()):
+                raise ValueError(f"Invalid dump option '{opt}': prohibited command argument.")
+        return v
+
 
 class FileSourceConfig(BaseModel):
     """Configuration for directory paths to be backed up."""

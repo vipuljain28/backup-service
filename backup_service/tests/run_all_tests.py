@@ -24,6 +24,13 @@ from backup_service.tests.test_storage import (
     test_storage_factory_invalid_provider
 )
 from backup_service.tests.test_restore import test_archive_reconnection_and_restore
+from backup_service.tests.test_pentest_security import (
+    test_rate_limiter_brute_force_lockout,
+    test_timing_attack_constant_time_mitigation,
+    test_password_strength_validator,
+    test_directory_explorer_sensitive_file_blocking,
+    test_database_config_injection_rejection
+)
 
 TEST_SUITES = [
     ("Catalog: ACID State Store & Soft Deletions", test_catalog_lifecycle),
@@ -38,6 +45,11 @@ TEST_SUITES = [
     ("Storage: Factory & Local Provider", test_storage_factory_local),
     ("Storage: Unknown Provider Exception", test_storage_factory_invalid_provider),
     ("Disaster Recovery: Archive Reconnect & Restore", test_archive_reconnection_and_restore),
+    ("Pentest Defense: CWE-307 Brute-Force Rate Limiting & Lockout", test_rate_limiter_brute_force_lockout),
+    ("Pentest Defense: CWE-208 Constant-Time PBKDF2 Anti-Timing Attack", test_timing_attack_constant_time_mitigation),
+    ("Pentest Defense: CWE-521 Enterprise Password Policy Enforcement", test_password_strength_validator),
+    ("Pentest Defense: CWE-552 Credential & Vault File Redaction", test_directory_explorer_sensitive_file_blocking),
+    ("Pentest Defense: CWE-78 Database Parameter Injection Prevention", test_database_config_injection_rejection),
 ]
 
 

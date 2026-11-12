@@ -283,3 +283,45 @@ async def delete_server(client_id: int, server_id: int, request: Request, user: 
         details={"client_id": client_id}
     )
     return RedirectResponse(url="/clients", status_code=303)
+
+
+@router.post("/clients/{client_id}/databases/{db_id}/delete")
+async def delete_database(client_id: int, db_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Delete a database target from a client."""
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    with db.connection() as conn:
+        conn.execute("DELETE FROM database_targets WHERE id = ? AND client_id = ?", (db_id, client_id))
+
+    request.app.state.audit_logger.log(
+        action="DELETE_DATABASE",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="database_target",
+        resource_id=str(db_id),
+        details={"client_id": client_id}
+    )
+    return RedirectResponse(url="/clients", status_code=303)
+
+
+@router.post("/clients/{client_id}/folders/{folder_id}/delete")
+async def delete_folder(client_id: int, folder_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Delete a folder source from a client."""
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    with db.connection() as conn:
+        conn.execute("DELETE FROM folder_sources WHERE id = ? AND client_id = ?", (folder_id, client_id))
+
+    request.app.state.audit_logger.log(
+        action="DELETE_FOLDER",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="folder_source",
+        resource_id=str(folder_id),
+        details={"client_id": client_id}
+    )
+    return RedirectResponse(url="/clients", status_code=303)

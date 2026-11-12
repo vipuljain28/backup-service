@@ -20,6 +20,7 @@ logger = logging.getLogger("backup_service.explorer")
 def sanitize_path(requested_path: str) -> str:
     """Sanitize and normalize path to prevent OWASP directory traversal exploits.
     Always returns normalized forward-slash absolute path representation.
+    Preserves Windows drive roots when running on Windows (e.g. C:/).
     """
     if not requested_path or requested_path.strip() in ("", "."):
         return "/"
@@ -35,6 +36,16 @@ def sanitize_path(requested_path: str) -> str:
         else:
             parts.append(segment)
 
+    if not parts:
+        return "/"
+
+    # Check for Windows drive letter (e.g., C:)
+    if len(parts[0]) == 2 and parts[0][1] == ":" and parts[0][0].isalpha():
+        drive = parts[0].upper()
+        if len(parts) == 1:
+            return f"{drive}/"
+        return f"{drive}/" + "/".join(parts[1:])
+
     return "/" + "/".join(parts)
 
 
@@ -45,12 +56,35 @@ class DirectoryExplorer:
     def explore_local(target_path: str = "/") -> Dict[str, Any]:
         """List local directory contents with metadata."""
         clean_p = sanitize_path(target_path)
+
+        # On Windows, browsing root "/" lists available drives (C:, D:, etc.)
+        if os.name == "nt" and clean_p == "/":
+            import string
+            drives = []
+            for letter in string.ascii_uppercase:
+                if os.path.exists(f"{letter}:\\"):
+                    drives.append({
+                        "name": f"Drive {letter}:",
+                        "path": f"{letter}:/",
+                        "is_dir": True,
+                        "size": 0,
+                        "mtime": 0.0,
+                        "readable": True
+                    })
+            return {
+                "current_path": "/",
+                "parent_path": None,
+                "error": None,
+                "items": drives
+            }
+
         norm_path = Path("." if clean_p == "/" else clean_p).resolve()
 
         if not norm_path.exists():
+            clean_parent = str(Path(clean_p).parent).replace("\\", "/") if clean_p not in ("/", "") else None
             return {
                 "current_path": clean_p,
-                "parent_path": str(Path(clean_p).parent).replace("\\", "/") if clean_p != "/" else None,
+                "parent_path": clean_parent or "/",
                 "error": "Directory does not exist",
                 "items": []
             }
@@ -93,6 +127,8 @@ class DirectoryExplorer:
         # Sort: directories first, then alphabetical
         items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
         parent = str(norm_path.parent).replace("\\", "/") if norm_path.parent != norm_path else None
+        if os.name == "nt" and (not parent or parent == str(norm_path).replace("\\", "/") or parent.endswith(":")):
+            parent = "/"
 
         return {
             "current_path": str(norm_path).replace("\\", "/"),
@@ -114,10 +150,11 @@ class DirectoryExplorer:
                 if not stat.S_ISDIR(attr.st_mode):
                     clean_path = str(Path(clean_path).parent).replace("\\", "/")
             except IOError:
+                clean_parent = str(Path(clean_path).parent).replace("\\", "/") if clean_path not in ("/", "") else None
                 return {
                     "current_path": clean_path,
-                    "parent_path": None,
-                    "error": f"Remote path '{clean_path}' does not exist",
+                    "parent_path": clean_parent or "/",
+                    "error": f"Remote directory '{clean_path}' does not exist on this server.",
                     "items": []
                 }
 

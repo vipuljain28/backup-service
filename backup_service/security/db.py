@@ -256,8 +256,22 @@ class DatabaseManager:
             for c in clients:
                 cid = c["id"]
                 c["servers"] = [dict(r) for r in conn.execute("SELECT * FROM server_connections WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
-                c["databases"] = [dict(r) for r in conn.execute("SELECT * FROM database_targets WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
-                c["folders"] = [dict(r) for r in conn.execute("SELECT * FROM folder_sources WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
+                c["databases"] = [dict(r) for r in conn.execute(
+                    """
+                    SELECT d.*, s.name AS server_name, s.mode AS server_mode, s.host AS server_host
+                    FROM database_targets d
+                    LEFT JOIN server_connections s ON d.server_id = s.id
+                    WHERE d.client_id = ?
+                    ORDER BY d.id ASC
+                    """, (cid,)).fetchall()]
+                c["folders"] = [dict(r) for r in conn.execute(
+                    """
+                    SELECT f.*, s.name AS server_name, s.mode AS server_mode, s.host AS server_host
+                    FROM folder_sources f
+                    LEFT JOIN server_connections s ON f.server_id = s.id
+                    WHERE f.client_id = ?
+                    ORDER BY f.id ASC
+                    """, (cid,)).fetchall()]
                 c["schedules"] = [dict(r) for r in conn.execute("SELECT * FROM backup_schedules WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
             return clients
 
@@ -270,8 +284,22 @@ class DatabaseManager:
             client_dict = dict(row)
             # Attach children
             client_dict["servers"] = [dict(r) for r in conn.execute("SELECT * FROM server_connections WHERE client_id = ?", (client_id_num,)).fetchall()]
-            client_dict["databases"] = [dict(r) for r in conn.execute("SELECT * FROM database_targets WHERE client_id = ?", (client_id_num,)).fetchall()]
-            client_dict["folders"] = [dict(r) for r in conn.execute("SELECT * FROM folder_sources WHERE client_id = ?", (client_id_num,)).fetchall()]
+            client_dict["databases"] = [dict(r) for r in conn.execute(
+                """
+                SELECT d.*, s.name AS server_name, s.mode AS server_mode, s.host AS server_host
+                FROM database_targets d
+                LEFT JOIN server_connections s ON d.server_id = s.id
+                WHERE d.client_id = ?
+                ORDER BY d.id ASC
+                """, (client_id_num,)).fetchall()]
+            client_dict["folders"] = [dict(r) for r in conn.execute(
+                """
+                SELECT f.*, s.name AS server_name, s.mode AS server_mode, s.host AS server_host
+                FROM folder_sources f
+                LEFT JOIN server_connections s ON f.server_id = s.id
+                WHERE f.client_id = ?
+                ORDER BY f.id ASC
+                """, (client_id_num,)).fetchall()]
             client_dict["schedules"] = [dict(r) for r in conn.execute("SELECT * FROM backup_schedules WHERE client_id = ?", (client_id_num,)).fetchall()]
             return client_dict
 

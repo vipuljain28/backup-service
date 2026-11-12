@@ -160,6 +160,39 @@ class SSHDriver(SourceDriver):
         sftp.get(file_info.abs_path_or_remote, str(local_dest))
         return local_dest
 
+    def verify_database_access(self, db_config: DatabaseConfig) -> None:
+        """Verify database connectivity and credentials without dumping data."""
+        client = self._get_client()
+        if db_config.engine in ("mysql", "mariadb"):
+            pwd_clause = f"-p'{db_config.password}'" if db_config.password else ""
+            test_cmd = (
+                f"mysql -h {db_config.host} -P {db_config.port} -u {db_config.user} "
+                f"{pwd_clause} {db_config.db_name} -e 'SELECT 1;' 2>&1"
+            )
+            stdin, stdout, stderr = client.exec_command(test_cmd, timeout=10)
+            output = stdout.read().decode("utf-8", errors="ignore").strip()
+            exit_code = stdout.channel.recv_exit_status()
+            fatal_keywords = ["ERROR ", "Access denied", "Can't connect", "Unknown database"]
+            if exit_code != 0 or any(k in output for k in fatal_keywords):
+                raise RuntimeError(
+                    f"Database connection failed for '{db_config.db_name}' on remote host: {output}"
+                )
+            logger.info("[DRY RUN] Verified MySQL database access for '%s' (DB: %s)", db_config.name, db_config.db_name)
+        elif db_config.engine == "postgres":
+            pwd_env = f"PGPASSWORD='{db_config.password}' " if db_config.password else ""
+            test_cmd = (
+                f"{pwd_env}psql -h {db_config.host} -p {db_config.port} -U {db_config.user} "
+                f"-d {db_config.db_name} -c 'SELECT 1;' 2>&1"
+            )
+            stdin, stdout, stderr = client.exec_command(test_cmd, timeout=10)
+            output = stdout.read().decode("utf-8", errors="ignore").strip()
+            exit_code = stdout.channel.recv_exit_status()
+            if exit_code != 0 or "FATAL:" in output:
+                raise RuntimeError(
+                    f"PostgreSQL connection failed for '{db_config.db_name}' on remote host: {output}"
+                )
+            logger.info("[DRY RUN] Verified PostgreSQL database access for '%s' (DB: %s)", db_config.name, db_config.db_name)
+
     def dump_database(
         self,
         db_config: DatabaseConfig,
@@ -176,17 +209,19 @@ class SSHDriver(SourceDriver):
         if db_config.engine in ("mysql", "mariadb"):
             pwd_clause = f"-p'{db_config.password}'" if db_config.password else ""
             opts = " ".join(db_config.dump_options)
-            remote_cmd = (
+            inner_cmd = (
                 f"mysqldump -h {db_config.host} -P {db_config.port} -u {db_config.user} "
                 f"{pwd_clause} {opts} {db_config.db_name} | gzip -c"
             )
+            remote_cmd = f"bash -c 'set -o pipefail; {inner_cmd}'"
         elif db_config.engine == "postgres":
             pwd_env = f"PGPASSWORD='{db_config.password}' " if db_config.password else ""
             opts = " ".join(db_config.dump_options)
-            remote_cmd = (
+            inner_cmd = (
                 f"{pwd_env}pg_dump -h {db_config.host} -p {db_config.port} -U {db_config.user} "
                 f"{opts} {db_config.db_name} | gzip -c"
             )
+            remote_cmd = f"bash -c 'set -o pipefail; {inner_cmd}'"
         else:
             raise ValueError(f"Unsupported database engine: {db_config.engine}")
 
@@ -207,14 +242,18 @@ class SSHDriver(SourceDriver):
                 f_out.write(chunk)
                 total_bytes += len(chunk)
 
-        err_output = stderr.read().decode("utf-8").strip()
+        err_output = stderr.read().decode("utf-8", errors="ignore").strip()
         exit_status = stdout.channel.recv_exit_status()
 
-        if exit_status != 0:
+        fatal_keywords = ["Got error:", "Access denied", "Can't connect", "Unknown database", "ERROR "]
+        has_fatal_error = any(k in err_output for k in fatal_keywords)
+
+        if exit_status != 0 or has_fatal_error or total_bytes <= 40:
             if local_output_path.exists():
                 local_output_path.unlink()
+            err_msg = err_output or f"mysqldump exited with status {exit_status} and generated 0 database bytes."
             raise RuntimeError(
-                f"Remote database dump failed with exit code {exit_status}: {err_output}"
+                f"Remote database dump failed for '{db_config.db_name}': {err_msg}"
             )
 
         logger.info(

@@ -51,6 +51,10 @@ class SourceDriver(ABC):
         """
         pass
 
+    def verify_database_access(self, db_config: DatabaseConfig) -> None:
+        """Verify database connectivity and credentials without dumping data."""
+        pass
+
     def close(self):
         """Clean up open connections or sessions."""
         pass

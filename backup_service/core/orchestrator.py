@@ -112,17 +112,22 @@ class BackupOrchestrator:
         driver = get_source_driver(client)
 
         try:
+            logger.info("Connecting to source host (%s)...", client.connection_mode.upper())
+            if not driver.test_connection():
+                raise ConnectionError(f"Failed to establish connection to source host ({client.connection_mode.upper()})")
+
             # ------------------------------------------------------------------
-            # Phase 1: Database Full Dumps
+            # Phase 1: Database Full Dumps & Verification
             # ------------------------------------------------------------------
             if client.databases:
-                logger.info("Phase 1: Executing full database dumps for %d database(s)...", len(client.databases))
+                logger.info("Phase 1: Validating & dumping %d database(s)...", len(client.databases))
                 for db in client.databases:
                     db_filename = f"{db.name}_{run_date}_{run_time_str}.sql.gz"
                     local_dump_target = staging_inc_db_dir / db_filename
 
                     if dry_run:
-                        logger.info("[DRY RUN] Would dump database '%s' (DB: %s)", db.name, db.db_name)
+                        logger.info("[DRY RUN] Verifying credentials & connectivity to database '%s' (DB: %s)...", db.name, db.db_name)
+                        driver.verify_database_access(db)
                         manifest.databases.append(DatabaseDumpItem(
                             name=db.name,
                             engine=db.engine,

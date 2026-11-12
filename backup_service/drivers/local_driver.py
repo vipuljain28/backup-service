@@ -71,6 +71,24 @@ class LocalDriver(SourceDriver):
         shutil.copy2(file_info.abs_path_or_remote, str(local_dest))
         return local_dest
 
+    def verify_database_access(self, db_config: DatabaseConfig) -> None:
+        """Verify local database connectivity and credentials without dumping data."""
+        from backup_service.drivers.db_checker import DatabaseChecker
+        result = DatabaseChecker.test_connection(
+            engine=db_config.engine,
+            host=db_config.host,
+            port=db_config.port,
+            user=db_config.user,
+            password=db_config.password or "",
+            db_name=db_config.db_name,
+            ssl_enabled=False
+        )
+        if not result["connected"]:
+            raise RuntimeError(
+                f"Database connection failed for '{db_config.db_name}' on local host: {result['message']}"
+            )
+        logger.info("[DRY RUN] Verified local database access for '%s' (DB: %s)", db_config.name, db_config.db_name)
+
     def dump_database(
         self,
         db_config: DatabaseConfig,

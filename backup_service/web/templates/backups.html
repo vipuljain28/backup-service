@@ -14,21 +14,21 @@
         <p class="text-xs text-gray-500 mt-0.5">Triggers complete database full dumps, differential file scans, and uniform cloud sync.</p>
       </div>
 
-      <form method="POST" action="/backups/trigger" class="mt-4 md:mt-0 flex items-center space-x-3">
-        <select name="client_id" required class="border rounded-md px-3 py-2 text-sm font-medium">
+      <form id="form-trigger-backup" onsubmit="handleTriggerBackup(event)" class="mt-4 md:mt-0 flex items-center space-x-3">
+        <select id="backup-client-select" name="client_id" required class="border rounded-md px-3 py-2 text-sm font-medium bg-white">
           <option value="" disabled selected>-- Select Client Tenant --</option>
           {% for c in clients %}
           <option value="{{ c.id }}">{{ c.display_name }} ({{ c.client_id }})</option>
           {% endfor %}
         </select>
 
-        <label class="flex items-center space-x-1.5 text-xs text-gray-600 font-medium">
-          <input type="checkbox" name="dry_run" value="true" class="rounded text-blue-600">
+        <label class="flex items-center space-x-1.5 text-xs text-gray-700 font-medium cursor-pointer">
+          <input type="checkbox" id="backup-dryrun-toggle" name="dry_run" value="true" class="rounded text-blue-600">
           <span>Dry Run</span>
         </label>
 
-        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md text-sm shadow">
-          Run Backup Now
+        <button type="submit" id="btn-run-backup" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md text-sm shadow flex items-center space-x-1.5">
+          <span>Run Backup Now</span>
         </button>
       </form>
     </div>
@@ -37,11 +37,19 @@
   <!-- Backup Execution History Table -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
     <div class="p-5 border-b border-gray-200 flex items-center justify-between">
-      <h3 class="font-bold text-gray-800">Historical Snapshot Ledger</h3>
-      <span class="text-xs text-gray-500">10-Day Sliding Window Active</span>
+      <div class="flex items-center space-x-2">
+        <h3 class="font-bold text-gray-800">Historical Snapshot Ledger</h3>
+        <span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-mono font-medium">{{ jobs|length }} Runs</span>
+      </div>
+      <div class="flex items-center space-x-3">
+        <button onclick="window.location.reload()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-1">
+          <span>⟳ Refresh</span>
+        </button>
+        <span class="text-xs text-gray-500">10-Day Sliding Window</span>
+      </div>
     </div>
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
+      <table class="w-full text-left text-sm" id="jobs-table">
         <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
           <tr>
             <th class="px-6 py-3">Client</th>
@@ -56,7 +64,7 @@
         </thead>
         <tbody class="divide-y divide-gray-200 text-gray-700">
           {% for job in jobs %}
-          <tr class="hover:bg-gray-50">
+          <tr class="hover:bg-gray-50 transition" id="job-row-{{ job.id }}">
             <td class="px-6 py-4 font-semibold text-gray-900">{{ job.client_name }}</td>
             <td class="px-6 py-4 font-mono text-xs">{{ job.run_timestamp }}</td>
             <td class="px-6 py-4 text-xs font-semibold uppercase text-gray-500">{{ job.trigger_type }}</td>
@@ -66,19 +74,19 @@
               {% elif job.status == 'running' %}
               <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 animate-pulse">RUNNING</span>
               {% else %}
-              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">{{ job.status|upper }}</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800" title="{{ job.error_message or '' }}">FAILED</span>
               {% endif %}
             </td>
             <td class="px-6 py-4 font-mono text-xs">
-              <span class="text-green-600">+{{ job.files_added }}</span>
-              <span class="text-blue-600 ml-1">*{{ job.files_updated }}</span>
-              <span class="text-yellow-600 ml-1">-{{ job.files_deleted }} (preserved)</span>
-              <span class="text-purple-600 ml-1">DBs: {{ job.dbs_dumped }}</span>
+              <span class="text-green-600" title="Files Added">+{{ job.files_added }}</span>
+              <span class="text-blue-600 ml-1" title="Files Updated">*{{ job.files_updated }}</span>
+              <span class="text-yellow-600 ml-1" title="Files Deleted (Preserved)">-{{ job.files_deleted }}</span>
+              <span class="text-purple-600 ml-1" title="Databases Dumped">DBs: {{ job.dbs_dumped }}</span>
             </td>
             <td class="px-6 py-4 font-mono text-xs text-gray-600">
               {{ (job.total_bytes / (1024 * 1024))|round(2) }} MB
             </td>
-            <td class="px-6 py-4 text-xs text-gray-600">
+            <td class="px-6 py-4 text-xs text-gray-600 font-mono">
               {{ job.duration_seconds|round(2) }}s
             </td>
             <td class="px-6 py-4 text-right">
@@ -88,7 +96,7 @@
             </td>
           </tr>
           {% else %}
-          <tr>
+          <tr id="no-jobs-row">
             <td colspan="8" class="px-6 py-8 text-center text-gray-400">No backup records found. Trigger your first backup above.</td>
           </tr>
           {% endfor %}
@@ -97,6 +105,72 @@
     </div>
   </div>
 
+</div>
+
+<!-- Live Backup Execution Monitor Modal -->
+<div id="modal-live-backup" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-5">
+    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+      <div>
+        <h3 class="text-base font-bold text-gray-900" id="live-modal-title">Executing Backup</h3>
+        <p class="text-xs text-gray-500" id="live-modal-subtitle">Processing targets...</p>
+      </div>
+      <span id="live-status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 animate-pulse">RUNNING</span>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+      <div id="live-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300 w-1/4 animate-pulse"></div>
+    </div>
+
+    <!-- Step Checklist -->
+    <div class="space-y-2 text-xs">
+      <div class="flex items-center space-x-2" id="step-connect">
+        <span class="text-blue-600 font-bold">⚙</span>
+        <span class="text-gray-700 font-medium">Connecting to Host Server & Checking DB Sockets...</span>
+      </div>
+      <div class="flex items-center space-x-2 text-gray-400" id="step-dbs">
+        <span>○</span>
+        <span>Performing full database dumps (MySQL/PostgreSQL)...</span>
+      </div>
+      <div class="flex items-center space-x-2 text-gray-400" id="step-files">
+        <span>○</span>
+        <span>Scanning remote file sources via SFTP differential crawler...</span>
+      </div>
+      <div class="flex items-center space-x-2 text-gray-400" id="step-manifest">
+        <span>○</span>
+        <span>Computing SHA-256 hashes & generating audit manifest...</span>
+      </div>
+      <div class="flex items-center space-x-2 text-gray-400" id="step-complete">
+        <span>○</span>
+        <span>Enforcing retention & completing snapshot ledger...</span>
+      </div>
+    </div>
+
+    <!-- Live Execution Results Box -->
+    <div id="live-results-box" class="p-4 rounded-lg bg-gray-50 border border-gray-200 text-xs hidden space-y-2">
+      <div class="font-bold text-gray-900 flex items-center justify-between">
+        <span>Execution Summary:</span>
+        <span id="live-duration" class="font-mono text-gray-600">0.0s</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-gray-700">
+        <div>Files Scanned / Added: <strong id="live-files-count" class="text-blue-600">0</strong></div>
+        <div>Databases Dumped: <strong id="live-dbs-count" class="text-purple-600">0</strong></div>
+        <div>Total Volume: <strong id="live-volume" class="font-mono">0.0 MB</strong></div>
+        <div>Result Status: <strong id="live-final-status" class="text-green-600">SUCCESS</strong></div>
+      </div>
+      <div id="live-error-text" class="text-red-600 bg-red-50 p-2 rounded hidden font-mono text-[11px]"></div>
+    </div>
+
+    <div class="flex justify-end space-x-3 pt-3 border-t">
+      <button type="button" id="btn-live-view-manifest" onclick="viewManifestFromLiveModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs hidden">
+        View Audit Manifest
+      </button>
+      <button type="button" id="btn-live-close" onclick="closeLiveModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-xs font-semibold border">
+        Dismiss & View Ledger
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- Manifest Viewer Modal -->
@@ -121,6 +195,173 @@
 
 {% block scripts %}
 <script>
+let currentActiveJobId = null;
+let pollInterval = null;
+
+async function handleTriggerBackup(event) {
+  event.preventDefault();
+  const select = document.getElementById('backup-client-select');
+  const clientId = select.value;
+  if (!clientId) {
+    alert("Please select a client tenant first.");
+    return;
+  }
+  const clientName = select.options[select.selectedIndex].text;
+  const isDryRun = document.getElementById('backup-dryrun-toggle').checked;
+
+  const btn = document.getElementById('btn-run-backup');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="inline-block animate-spin mr-1.5">⚙</span> Starting...';
+
+  // Open modal and initialize UI
+  const modal = document.getElementById('modal-live-backup');
+  document.getElementById('live-modal-title').innerText = `Backup: ${clientName}`;
+  document.getElementById('live-modal-subtitle').innerText = isDryRun ? "Simulation Mode (Dry Run) Active" : "Full Production Backup";
+  document.getElementById('live-status-badge').innerText = "RUNNING";
+  document.getElementById('live-status-badge').className = "px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 animate-pulse";
+  
+  const bar = document.getElementById('live-progress-bar');
+  bar.className = "bg-blue-600 h-2.5 rounded-full transition-all duration-300 w-1/4 animate-pulse";
+  
+  document.getElementById('live-results-box').classList.add('hidden');
+  document.getElementById('btn-live-view-manifest').classList.add('hidden');
+  document.getElementById('live-error-text').classList.add('hidden');
+
+  setStepStatus('step-connect', 'active');
+  setStepStatus('step-dbs', 'pending');
+  setStepStatus('step-files', 'pending');
+  setStepStatus('step-manifest', 'pending');
+  setStepStatus('step-complete', 'pending');
+
+  modal.classList.remove('hidden');
+
+  try {
+    const formData = new FormData();
+    formData.append('client_id', clientId);
+    if (isDryRun) formData.append('dry_run', 'true');
+
+    const res = await fetch('/backups/trigger', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.detail || data.message || "Failed to trigger backup");
+    }
+
+    currentActiveJobId = data.job_id;
+    startJobPolling(currentActiveJobId);
+  } catch (err) {
+    alert(`❌ Trigger Error: ${err.message}`);
+    modal.classList.add('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Run Backup Now';
+  }
+}
+
+function setStepStatus(stepId, state) {
+  const el = document.getElementById(stepId);
+  if (!el) return;
+  if (state === 'done') {
+    el.className = "flex items-center space-x-2 text-green-700 font-medium";
+    el.firstElementChild.innerText = "✔";
+  } else if (state === 'active') {
+    el.className = "flex items-center space-x-2 text-blue-700 font-bold";
+    el.firstElementChild.innerHTML = '<span class="inline-block animate-spin mr-1">⚙</span>';
+  } else {
+    el.className = "flex items-center space-x-2 text-gray-400";
+    el.firstElementChild.innerText = "○";
+  }
+}
+
+function startJobPolling(jobId) {
+  if (pollInterval) clearInterval(pollInterval);
+  let ticks = 0;
+
+  pollInterval = setInterval(async () => {
+    ticks++;
+    if (ticks === 1) {
+      setStepStatus('step-connect', 'done');
+      setStepStatus('step-dbs', 'active');
+      document.getElementById('live-progress-bar').className = "bg-blue-600 h-2.5 rounded-full transition-all duration-300 w-2/4";
+    } else if (ticks === 2) {
+      setStepStatus('step-dbs', 'done');
+      setStepStatus('step-files', 'active');
+      document.getElementById('live-progress-bar').className = "bg-blue-600 h-2.5 rounded-full transition-all duration-300 w-3/4";
+    }
+
+    try {
+      const resp = await fetch(`/api/v1/backups/jobs/${jobId}/status`);
+      if (!resp.ok) return;
+      const job = await resp.json();
+
+      if (job.status === 'success') {
+        clearInterval(pollInterval);
+        onJobFinished(job, true);
+      } else if (job.status === 'failed') {
+        clearInterval(pollInterval);
+        onJobFinished(job, false);
+      }
+    } catch (e) {
+      // keep polling
+    }
+  }, 800);
+}
+
+function onJobFinished(job, isSuccess) {
+  const btn = document.getElementById('btn-run-backup');
+  btn.disabled = false;
+  btn.innerHTML = 'Run Backup Now';
+
+  const bar = document.getElementById('live-progress-bar');
+  const badge = document.getElementById('live-status-badge');
+  const resultsBox = document.getElementById('live-results-box');
+
+  resultsBox.classList.remove('hidden');
+  document.getElementById('live-duration').innerText = `${job.duration_seconds}s`;
+  document.getElementById('live-files-count').innerText = job.files_added;
+  document.getElementById('live-dbs-count').innerText = job.dbs_dumped;
+  document.getElementById('live-volume').innerText = `${(job.total_bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  if (isSuccess) {
+    badge.innerText = "SUCCESS";
+    badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800";
+    bar.className = "bg-green-500 h-2.5 rounded-full transition-all duration-300 w-full";
+    document.getElementById('live-final-status').innerText = "COMPLETED";
+    document.getElementById('live-final-status').className = "text-green-600 font-bold";
+
+    setStepStatus('step-connect', 'done');
+    setStepStatus('step-dbs', 'done');
+    setStepStatus('step-files', 'done');
+    setStepStatus('step-manifest', 'done');
+    setStepStatus('step-complete', 'done');
+
+    document.getElementById('btn-live-view-manifest').classList.remove('hidden');
+  } else {
+    badge.innerText = "FAILED";
+    badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800";
+    bar.className = "bg-red-500 h-2.5 rounded-full transition-all duration-300 w-full";
+    document.getElementById('live-final-status').innerText = "FAILED";
+    document.getElementById('live-final-status').className = "text-red-600 font-bold";
+
+    const errBox = document.getElementById('live-error-text');
+    errBox.classList.remove('hidden');
+    errBox.innerText = `Error: ${job.error_message || 'Backup failed without error details.'}`;
+  }
+}
+
+function viewManifestFromLiveModal() {
+  if (currentActiveJobId) {
+    viewManifest(currentActiveJobId);
+  }
+}
+
+function closeLiveModal() {
+  document.getElementById('modal-live-backup').classList.add('hidden');
+  window.location.href = '/backups';
+}
+
 async function viewManifest(jobId) {
   const modal = document.getElementById('modal-manifest');
   const content = document.getElementById('manifest-content');

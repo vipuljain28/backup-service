@@ -149,6 +149,9 @@ class BackupOrchestrator:
             # Phase 2: File Delta Scanning & Non-Destructive Ingestion
             # ------------------------------------------------------------------
             logger.info("Phase 2: Scanning %d configured file source path(s)...", len(client.file_sources))
+            pending_catalog_updates = []
+            pending_catalog_deletions = []
+
             for source in client.file_sources:
                 logger.info("Scanning source '%s' at: %s", source.id, source.path)
                 active_files = self.catalog.get_active_files(client.client_id, source.id)
@@ -179,14 +182,14 @@ class BackupOrchestrator:
                             shutil.copy2(str(staged_inc_file), str(staged_master_file))
 
                             file_hash = calculate_sha256(staged_inc_file)
-                            self.catalog.record_file_addition_or_update(
-                                client_id=client.client_id,
-                                source_id=source.id,
-                                rel_path=rel_p,
-                                size=file_info.size,
-                                mtime=file_info.mtime,
-                                sha256=file_hash
-                            )
+                            pending_catalog_updates.append({
+                                "client_id": client.client_id,
+                                "source_id": source.id,
+                                "rel_path": rel_p,
+                                "size": file_info.size,
+                                "mtime": file_info.mtime,
+                                "sha256": file_hash
+                            })
                             manifest.changes.append(FileChangeItem(
                                 source_id=source.id,
                                 rel_path=rel_p,
@@ -218,14 +221,14 @@ class BackupOrchestrator:
                                     staged_master_file.parent.mkdir(parents=True, exist_ok=True)
                                     shutil.copy2(str(staged_inc_file), str(staged_master_file))
 
-                                    self.catalog.record_file_addition_or_update(
-                                        client_id=client.client_id,
-                                        source_id=source.id,
-                                        rel_path=rel_p,
-                                        size=file_info.size,
-                                        mtime=file_info.mtime,
-                                        sha256=file_hash
-                                    )
+                                    pending_catalog_updates.append({
+                                        "client_id": client.client_id,
+                                        "source_id": source.id,
+                                        "rel_path": rel_p,
+                                        "size": file_info.size,
+                                        "mtime": file_info.mtime,
+                                        "sha256": file_hash
+                                    })
                                     manifest.changes.append(FileChangeItem(
                                         source_id=source.id,
                                         rel_path=rel_p,
@@ -238,14 +241,14 @@ class BackupOrchestrator:
                                     # Content identical, only metadata changed
                                     if staged_inc_file.exists():
                                         staged_inc_file.unlink()
-                                    self.catalog.record_file_addition_or_update(
-                                        client_id=client.client_id,
-                                        source_id=source.id,
-                                        rel_path=rel_p,
-                                        size=file_info.size,
-                                        mtime=file_info.mtime,
-                                        sha256=file_hash
-                                    )
+                                    pending_catalog_updates.append({
+                                        "client_id": client.client_id,
+                                        "source_id": source.id,
+                                        "rel_path": rel_p,
+                                        "size": file_info.size,
+                                        "mtime": file_info.mtime,
+                                        "sha256": file_hash
+                                    })
 
                 # Case C: Check for files deleted from source
                 # NON-DESTRUCTIVE: Never deleted from master!
@@ -257,7 +260,7 @@ class BackupOrchestrator:
                             source.id, rel_p
                         )
                         if not dry_run:
-                            self.catalog.mark_file_deleted(client.client_id, source.id, rel_p)
+                            pending_catalog_deletions.append((client.client_id, source.id, rel_p))
 
                         manifest.changes.append(FileChangeItem(
                             source_id=source.id,
@@ -329,6 +332,14 @@ class BackupOrchestrator:
 
                             target_folder_id = self.storage.ensure_directory_path(path_parts)
                             self.storage.upload_file(full_f, target_folder_id, f, overwrite=True)
+
+                # 4c. Atomically Commit Verified Catalog State (Only after confirmed storage upload)
+                if pending_catalog_updates or pending_catalog_deletions:
+                    logger.info(
+                        "Atomically committing snapshot catalog state (%d file updates, %d deletions)...",
+                        len(pending_catalog_updates), len(pending_catalog_deletions)
+                    )
+                    self.catalog.record_batch_updates(pending_catalog_updates, pending_catalog_deletions)
 
             # ------------------------------------------------------------------
             # Phase 5: Retention Policy Enforcement (10-day sliding window)

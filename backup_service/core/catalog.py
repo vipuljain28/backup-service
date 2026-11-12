@@ -7,7 +7,7 @@ ADDED, UPDATED, and DELETED files with zero data loss.
 import sqlite3
 import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 from contextlib import contextmanager
@@ -194,6 +194,47 @@ class StateCatalog:
                 """,
                 (now_iso, client_id, source_id, rel_path)
             )
+
+    def record_batch_updates(
+        self,
+        updates: List[Dict[str, Any]],
+        deletions: List[tuple]
+    ):
+        """Atomically commit pending file additions, updates, and deletions in a single transaction."""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            if updates:
+                params = [
+                    (u["client_id"], u["source_id"], u["rel_path"], u["size"], u["mtime"], u["sha256"], now_iso, now_iso)
+                    for u in updates
+                ]
+                conn.executemany(
+                    """
+                    INSERT INTO file_catalog (
+                        client_id, source_id, rel_path, size, mtime, sha256, 
+                        first_seen_at, last_updated_at, is_deleted, last_deleted_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+                    ON CONFLICT(client_id, source_id, rel_path) DO UPDATE SET
+                        size = excluded.size,
+                        mtime = excluded.mtime,
+                        sha256 = excluded.sha256,
+                        last_updated_at = excluded.last_updated_at,
+                        is_deleted = 0,
+                        last_deleted_at = NULL
+                    """,
+                    params
+                )
+            if deletions:
+                for client_id, source_id, rel_p in deletions:
+                    conn.execute(
+                        """
+                        UPDATE file_catalog
+                        SET is_deleted = 1, last_deleted_at = ?
+                        WHERE client_id = ? AND source_id = ? AND rel_path = ?
+                        """,
+                        (now_iso, client_id, source_id, rel_p)
+                    )
 
     def record_run(
         self,

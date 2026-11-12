@@ -16,14 +16,28 @@ router = APIRouter(tags=["Storage Providers"])
 @router.get("/storage")
 async def storage_page(request: Request, user: dict = Depends(require_auth)):
     db = request.app.state.db_manager
+    vault = request.app.state.vault
     storage_configs = db.list_storage_configs()
+
+    enhanced_configs = []
+    for sc in storage_configs:
+        sc_dict = dict(sc)
+        try:
+            creds = json.loads(vault.decrypt(sc["encrypted_credentials"]))
+            sc_dict["auth_mode"] = creds.get("auth_mode", "service_account")
+            sc_dict["root_folder"] = creds.get("root_folder_name") or creds.get("bucket_name") or creds.get("root_dir")
+        except Exception:
+            sc_dict["auth_mode"] = None
+            sc_dict["root_folder"] = None
+        enhanced_configs.append(sc_dict)
+
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request=request,
         name="storage.html",
         context={
             "user": user,
-            "storage_configs": storage_configs,
+            "storage_configs": enhanced_configs,
             "active_tab": "storage"
         }
     )
@@ -214,7 +228,7 @@ async def upload_key_api(request: Request, user: dict = Depends(require_auth)):
         client_email = data.get("client_email", "Unknown")
         project_id = data.get("project_id", "Unknown")
 
-        if config_id:
+        if config_id and body.get("update_config"):
             cfg = db.get_storage_config(config_id)
             if cfg and cfg["provider_type"] == "gdrive":
                 creds = json.loads(vault.decrypt(cfg["encrypted_credentials"]))
@@ -239,7 +253,7 @@ async def upload_key_api(request: Request, user: dict = Depends(require_auth)):
         client_obj = data.get("installed") or data.get("web") or {}
         client_id = client_obj.get("client_id", "Unknown")
 
-        if config_id:
+        if config_id and body.get("update_config"):
             cfg = db.get_storage_config(config_id)
             if cfg and cfg["provider_type"] == "gdrive":
                 creds = json.loads(vault.decrypt(cfg["encrypted_credentials"]))
@@ -255,10 +269,52 @@ async def upload_key_api(request: Request, user: dict = Depends(require_auth)):
             "key_type": "oauth_user",
             "file_path": "./keys/client_secret.json",
             "client_id": client_id,
-            "message": "OAuth 2.0 Client ID secret saved successfully! Switched mode to OAuth2 Client Flow."
+            "message": "OAuth 2.0 Client ID secret saved successfully! Form configured for OAuth2 Client Flow."
         }
     else:
         raise HTTPException(status_code=400, detail="Unrecognized Google JSON key format. Must be either a Service Account JSON or an OAuth 2.0 Client ID JSON.")
+
+
+@router.post("/api/v1/storage/{config_id}/switch-mode")
+async def switch_storage_mode(request: Request, config_id: int, user: dict = Depends(require_auth)):
+    """Switch an existing Google Drive gateway between Service Account and OAuth2."""
+    body = await request.json()
+    new_mode = body.get("mode", "service_account")
+    db = request.app.state.db_manager
+    vault = request.app.state.vault
+
+    cfg = db.get_storage_config(config_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Storage config not found")
+
+    creds = json.loads(vault.decrypt(cfg["encrypted_credentials"]))
+    creds["auth_mode"] = new_mode
+
+    if new_mode == "service_account":
+        creds["service_account_file"] = "./keys/service_account.json"
+    else:
+        creds["oauth_client_file"] = "./keys/client_secret.json"
+        creds["oauth_token_file"] = "./keys/token.json"
+
+    enc = vault.encrypt(json.dumps(creds))
+    with db.connection() as conn:
+        conn.execute("UPDATE storage_configs SET encrypted_credentials = ? WHERE id = ?", (enc, config_id))
+
+    request.app.state.audit_logger.log(
+        action="UPDATE_STORAGE_CONFIG_MODE",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="storage_config",
+        resource_id=str(config_id),
+        details={"new_mode": new_mode}
+    )
+
+    return {
+        "status": "success",
+        "config_id": config_id,
+        "new_mode": new_mode,
+        "message": f"Storage gateway mode switched to {new_mode.replace('_', ' ').title()} successfully!"
+    }
 
 
 @router.post("/api/v1/storage/gdrive/start-oauth")

@@ -25,26 +25,62 @@
   <!-- Configured Gateways Grid -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
     {% for sc in storage_configs %}
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4 hover:shadow-md transition">
       <div class="flex items-center justify-between">
         <h3 class="font-bold text-gray-900">{{ sc.name }}</h3>
         <span class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 uppercase">
           {{ sc.provider_type }}
         </span>
       </div>
-      <p class="text-xs text-gray-500">Protected by AES-256-GCM Vault</p>
-      <div class="pt-4 border-t border-gray-100 flex items-center justify-between gap-2">
-        <span class="text-xs text-green-600 font-semibold">&bull; Configured</span>
-        <div class="flex items-center space-x-2">
-          <button onclick="testConfiguredStorage({{ sc.id }}, '{{ sc.provider_type }}', this)" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded text-gray-700 transition">
-            Test Access
-          </button>
-          {% if sc.provider_type == 'gdrive' %}
-          <button onclick="triggerGoogleOAuth(this)" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-xs font-semibold rounded text-white shadow-xs transition inline-flex items-center space-x-1" title="Authorize Google Account">
-            <span>🔑 Authorize</span>
-          </button>
-          {% endif %}
+
+      <div class="space-y-1.5 text-xs text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+        {% if sc.provider_type == 'gdrive' %}
+          <div class="flex items-center justify-between">
+            <span class="text-gray-500 font-medium">Auth Mode:</span>
+            {% if sc.auth_mode == 'service_account' %}
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-green-100 text-green-800 flex items-center space-x-1">
+                <span>🤖 Service Account</span>
+              </span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800 flex items-center space-x-1">
+                <span>👤 OAuth2 User</span>
+              </span>
+            {% endif %}
+          </div>
+        {% endif %}
+        {% if sc.root_folder %}
+          <div class="flex items-center justify-between">
+            <span class="text-gray-500 font-medium">Root Folder:</span>
+            <span class="font-mono text-gray-800 font-semibold truncate max-w-[150px]" title="{{ sc.root_folder }}">{{ sc.root_folder }}</span>
+          </div>
+        {% endif %}
+        <div class="flex items-center justify-between pt-1 border-t border-gray-200 text-[11px] text-gray-400">
+          <span>Security</span>
+          <span>AES-256-GCM Vault</span>
         </div>
+      </div>
+
+      <div class="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
+        <button onclick="testConfiguredStorage({{ sc.id }}, '{{ sc.provider_type }}', this)" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded-lg text-gray-800 transition">
+          Test Access
+        </button>
+
+        {% if sc.provider_type == 'gdrive' %}
+          <div class="flex items-center space-x-1.5">
+            {% if sc.auth_mode == 'oauth_user' %}
+              <button onclick="triggerGoogleOAuth(this)" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs font-semibold rounded-lg text-white shadow-xs transition inline-flex items-center space-x-1" title="Authorize with Google">
+                <span>🔑 Authorize</span>
+              </button>
+              <button onclick="switchStorageMode({{ sc.id }}, 'service_account', this)" class="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[11px] font-semibold rounded-lg text-gray-700 border border-gray-300 transition" title="Switch this gateway to unattended Service Account">
+                Use Service Account
+              </button>
+            {% else %}
+              <button onclick="switchStorageMode({{ sc.id }}, 'oauth_user', this)" class="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-[11px] font-semibold rounded-lg text-gray-700 border border-gray-300 transition" title="Switch this gateway to personal OAuth2 User">
+                Switch to OAuth2
+              </button>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -1197,7 +1233,7 @@ async function submitGdriveJsonContent() {
     const res = await fetch('/api/v1/storage/upload-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ json_content: text, config_id: 1 })
+      body: JSON.stringify({ json_content: text })
     });
     const data = await res.json();
     if (res.ok && data.status === 'success') {
@@ -1219,6 +1255,32 @@ async function submitGdriveJsonContent() {
   } catch (err) {
     statusBox.className = "p-2.5 rounded text-xs bg-red-50 text-red-900 border border-red-300";
     statusBox.innerHTML = `❌ <strong>Error:</strong> ${err.message}`;
+  }
+}
+
+// Switch an existing storage gateway's auth mode
+async function switchStorageMode(configId, newMode, btn) {
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="animate-pulse">Switching...</span>';
+  try {
+    const res = await fetch(`/api/v1/storage/${configId}/switch-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: newMode })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
+      window.location.reload();
+    } else {
+      alert(`❌ Error switching mode: ${data.detail || data.message || 'Operation failed'}`);
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  } catch (err) {
+    alert(`❌ Request Error: ${err.message}`);
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
   }
 }
 </script>

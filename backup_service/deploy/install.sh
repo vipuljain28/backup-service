@@ -4,11 +4,11 @@
 # ==============================================================================
 set -euo pipefail
 
-INSTALL_DIR="/opt/star_backup"
-SERVICE_USER="starbackup"
+INSTALL_DIR="/opt/lims_backup"
+SERVICE_USER="limsbackup"
 
 echo "======================================================================"
-echo " STAR BACKUP ENTERPRISE PLATFORM INSTALLATION"
+echo " LIMS BACKUP ENTERPRISE PLATFORM INSTALLATION"
 echo "======================================================================"
 
 # 1. Check Root Privileges
@@ -58,6 +58,6 @@ systemctl enable --now backup-service.timer
 echo "======================================================================"
 echo "[SUCCESS] Installation Complete!"
 echo " Web Console running on: http://<SERVER_IP>:8080"
-echo " Initial Credentials   : admin / admin@STAR2026!"
+echo " Initial Credentials   : admin / admin@LIMS2026!"
 echo " Status Check          : systemctl status backup-service.service"
 echo "======================================================================"

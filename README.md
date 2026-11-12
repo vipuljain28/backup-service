@@ -195,10 +195,10 @@ Used for automated replication to Microsoft 365, OneDrive Business, or personal 
 Used for high-throughput object storage across AWS S3, TeraBox S3, Wasabi, Cloudflare R2, and MinIO:
 1. **Create S3 Bucket**:
    - Go to [AWS S3 Console](https://console.aws.amazon.com/s3/) > **Create bucket**.
-   - Name: `my-enterprise-backups-star` (globally unique). Keep *Block Public Access* enabled and enable SSE-S3 encryption.
+   - Name: `my-enterprise-backups-lims` (globally unique). Keep *Block Public Access* enabled and enable SSE-S3 encryption.
 2. **Create IAM User & Access Keys**:
    - Go to [AWS IAM Console](https://console.aws.amazon.com/iam/) > **Users > Create user**.
-   - Name: `star-backup-operator`.
+   - Name: `lims-backup-operator`.
    - Permissions: Attach `AmazonS3FullAccess` or granular least-privilege policy (see below).
    - Under **Security credentials > Access keys > Create access key** (Application outside AWS).
    - Copy **Access Key ID** (`AKIA...`) and **Secret Access Key**.
@@ -210,12 +210,12 @@ Used for high-throughput object storage across AWS S3, TeraBox S3, Wasabi, Cloud
     {
       "Effect": "Allow",
       "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
-      "Resource": "arn:aws:s3:::my-enterprise-backups-star"
+      "Resource": "arn:aws:s3:::my-enterprise-backups-lims"
     },
     {
       "Effect": "Allow",
       "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
-      "Resource": "arn:aws:s3:::my-enterprise-backups-star/*"
+      "Resource": "arn:aws:s3:::my-enterprise-backups-lims/*"
     }
   ]
 }
@@ -236,7 +236,7 @@ Zero-cloud-cost on-premises storage targeting local NVMe drives, USB arrays, or 
 sudo mkdir -p /mnt/nas/backups
 
 # Assign ownership to backup daemon user
-sudo chown -R starbackup:starbackup /mnt/nas/backups
+sudo chown -R limsbackup:limsbackup /mnt/nas/backups
 
 # Restrict permissions (owner read/write/exec, group read/exec)
 sudo chmod -R 750 /mnt/nas/backups
@@ -247,7 +247,7 @@ sudo chmod -R 750 /mnt/nas/backups
 192.168.1.100:/volume1/backups  /mnt/nas/backups  nfs  defaults,rw,nosuid,hard  0  0
 
 # SMB / Windows Share Mount Example
-//192.168.1.100/backups  /mnt/nas/backups  cifs  username=backup_user,password=SecretPass,uid=starbackup,gid=starbackup  0  0
+//192.168.1.100/backups  /mnt/nas/backups  cifs  username=backup_user,password=SecretPass,uid=limsbackup,gid=limsbackup  0  0
 ```
 3. **Windows Hosts**:
    - Specify absolute drive paths (e.g. `D:/Enterprise_Backups`) or UNC paths (`\\192.168.1.100\backups\star`). Ensure the Windows user running the service has write access.
@@ -322,14 +322,25 @@ Run the automated installation script:
 ```bash
 sudo bash backup_service/deploy/install.sh
 ```
-This creates a dedicated system user (`starbackup`), sets up a virtual environment, installs dependencies, and enables the systemd service and timer.
+This creates a dedicated system user (`limsbackup`), sets up a virtual environment, installs dependencies, and enables the systemd service and timer.
 
 ### Option 2: Docker Container
 Build and run the hardened container:
 ```bash
-docker build -t starbackup:latest -f backup_service/deploy/Dockerfile .
-docker run -d -p 8080:8080 -v /opt/star_data:/data starbackup:latest
+docker build -t limsbackup:latest -f backup_service/deploy/Dockerfile .
+docker run -d -p 8080:8080 -v /opt/star_data:/data limsbackup:latest
 ```
 
 ### Option 3: Central Orchestrator Managing Remote Servers
 Run on localhost or a central management node. Configure remote servers in the UI with SSH credentials (password or private key). Database dumps stream securely over SSH stdout directly into local staging, requiring **zero disk space overhead on the remote server**.
+
+---
+
+## Author & Engineering Signature
+
+**Vipul K Jain**  
+Lead Software Architect & Engineering Author
+
+- **Email:** [vipuljain2806@gmail.com](mailto:vipuljain2806@gmail.com)
+- **GitHub:** [@vipuljain28](https://github.com/vipuljain28)
+- **LinkedIn:** [@vipuljain2806](https://linkedin.com/in/vipuljain2806)

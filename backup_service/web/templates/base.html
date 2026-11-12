@@ -16,7 +16,7 @@
   <aside class="w-64 bg-sidebar text-gray-300 flex flex-col justify-between shadow-xl flex-shrink-0">
     <div>
       <div class="h-16 flex items-center px-6 bg-gray-900 border-b border-gray-800">
-        <span class="text-xl font-bold tracking-wider text-white">STAR<span class="text-blue-500">BACKUP</span></span>
+        <span class="text-xl font-bold tracking-wider text-white">LIMS<span class="text-blue-500">BACKUP</span></span>
       </div>
       <nav class="mt-6 px-4 space-y-1">
         <a href="/" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'dashboard' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
@@ -52,14 +52,40 @@
         <a href="/logout" class="text-gray-400 hover:text-red-400 text-sm font-medium">Logout</a>
       </div>
     </div>
+
+    <!-- Author & Architect Signature Sidebar Card -->
+    <div class="px-4 py-3 bg-gray-950 border-t border-gray-800 text-[11px] text-gray-400">
+      <div class="flex items-center space-x-1.5 font-semibold text-gray-300">
+        <span>Architect:</span>
+        <span class="text-white">Vipul K Jain</span>
+      </div>
+      <div class="flex items-center space-x-2 mt-1 text-[10px] font-mono">
+        <a href="https://github.com/vipuljain28" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">@vipuljain28</a>
+        <span class="text-gray-600">•</span>
+        <a href="https://linkedin.com/in/vipuljain2806" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">@vipuljain2806</a>
+      </div>
+    </div>
   </aside>
 
   <!-- Main Content Wrapper -->
   <div class="flex-1 flex flex-col overflow-y-auto">
     <!-- Top Header -->
-    <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
+    <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
       <h1 class="text-xl font-bold text-gray-800">{% block header_title %}Overview{% endblock %}</h1>
       <div class="flex items-center space-x-4">
+        <!-- Live System & Local Clocks -->
+        <div class="hidden sm:flex items-center space-x-3 text-xs bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg shadow-2xs">
+          <div class="flex items-center space-x-1" title="Server UTC Time">
+            <span class="text-gray-400 font-medium">🕒 UTC:</span>
+            <span id="header-utc-clock" class="font-mono font-bold text-gray-800">--:--:-- UTC</span>
+          </div>
+          <span class="text-gray-300">|</span>
+          <div class="flex items-center space-x-1" title="Your Local Timezone">
+            <span class="text-gray-400 font-medium">🌐 Local:</span>
+            <span id="header-local-clock" class="font-mono font-bold text-blue-700">--:--:--</span>
+          </div>
+        </div>
+
         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
           <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full"></span> Service Online
         </span>
@@ -67,11 +93,54 @@
     </header>
 
     <!-- Page Body -->
-    <main class="p-8">
+    <main class="p-8 flex-1">
       {% block content %}{% endblock %}
     </main>
+
+    <!-- Global Application Footer & Engineering Signature -->
+    <footer class="mt-auto px-8 py-3.5 border-t border-gray-200 bg-white text-xs text-gray-500 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0 shadow-sm flex-shrink-0">
+      <div class="flex items-center space-x-2">
+        <span class="font-bold tracking-wider text-gray-900">LIMS<span class="text-blue-600">BACKUP</span></span>
+        <span class="text-gray-300">|</span>
+        <span class="text-gray-600 font-medium">Enterprise Backup & Disaster Recovery Platform</span>
+      </div>
+      <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-gray-700">
+        <span class="text-gray-400 font-medium">Author:</span>
+        <span class="font-bold text-gray-900">Vipul K Jain</span>
+        <span class="text-gray-300">•</span>
+        <a href="https://github.com/vipuljain28" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 flex items-center space-x-1 font-mono font-medium">
+          <span>GitHub:</span> <span class="underline">@vipuljain28</span>
+        </a>
+        <span class="text-gray-300">•</span>
+        <a href="https://linkedin.com/in/vipuljain2806" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 flex items-center space-x-1 font-mono font-medium">
+          <span>LinkedIn:</span> <span class="underline">@vipuljain2806</span>
+        </a>
+        <span class="text-gray-300">•</span>
+        <a href="mailto:vipuljain2806@gmail.com" class="text-blue-600 hover:text-blue-800 font-mono">
+          vipuljain2806@gmail.com
+        </a>
+      </div>
+    </footer>
   </div>
 
+  <script>
+  function updateGlobalClocks() {
+    const now = new Date();
+    const utcHours = String(now.getUTCHours()).padStart(2, '0');
+    const utcMins = String(now.getUTCMinutes()).padStart(2, '0');
+    const utcSecs = String(now.getUTCSeconds()).padStart(2, '0');
+    const utcEl = document.getElementById('header-utc-clock');
+    if (utcEl) utcEl.innerText = `${utcHours}:${utcMins}:${utcSecs} UTC`;
+
+    const locHours = String(now.getHours()).padStart(2, '0');
+    const locMins = String(now.getMinutes()).padStart(2, '0');
+    const locSecs = String(now.getSeconds()).padStart(2, '0');
+    const locEl = document.getElementById('header-local-clock');
+    if (locEl) locEl.innerText = `${locHours}:${locMins}:${locSecs}`;
+  }
+  setInterval(updateGlobalClocks, 1000);
+  updateGlobalClocks();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

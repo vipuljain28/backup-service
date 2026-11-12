@@ -4,12 +4,12 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=starbackup
-Group=starbackup
-WorkingDirectory=/opt/star_backup
+User=limsbackup
+Group=limsbackup
+WorkingDirectory=/opt/lims_backup
 Environment=PYTHONUNBUFFERED=1
-Environment=METADATA_DB_PATH=/opt/star_backup/metadata.sqlite
-ExecStart=/opt/star_backup/venv/bin/python -m backup_service.web.server --host 0.0.0.0 --port 8080
+Environment=METADATA_DB_PATH=/opt/lims_backup/metadata.sqlite
+ExecStart=/opt/lims_backup/venv/bin/python -m backup_service.web.server --host 0.0.0.0 --port 8080
 Restart=always
 RestartSec=5
 LimitNOFILE=65536

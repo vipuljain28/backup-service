@@ -11,7 +11,7 @@ logger = logging.getLogger("backup_service.updater")
 class GitHubUpdater:
     """Manages version verification and automated GitHub updates."""
 
-    def __init__(self, repo_owner: str = "star-calibration", repo_name: str = "star-backup"):
+    def __init__(self, repo_owner: str = "vipuljain28", repo_name: str = "backup-service"):
         self.repo_owner = repo_owner
         self.repo_name = repo_name
 

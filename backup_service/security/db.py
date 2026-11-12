@@ -195,7 +195,7 @@ class DatabaseManager:
                     INSERT INTO users (username, email, password_hash, role, is_active, must_change_password, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    ("admin", "admin@starcalibration.local", initial_pass_hash, Role.ADMIN, 1, 1, now_iso, now_iso)
+                    ("admin", "admin@lims.local", initial_pass_hash, Role.ADMIN, 1, 1, now_iso, now_iso)
                 )
 
     # --------------------------------------------------------------------------

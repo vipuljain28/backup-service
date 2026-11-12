@@ -134,6 +134,8 @@ async def test_storage_api(request: Request, body: dict, user: dict = Depends(re
         return {
             "provider_type": provider_type,
             "connected": connected,
+            "needs_oauth": res.get("stage") == "oauth_action_required" if hasattr(provider, "verify_connection_detailed") else False,
+            "auth_url": res.get("auth_url") if hasattr(provider, "verify_connection_detailed") else None,
             "message": message
         }
     except Exception as exc:
@@ -172,6 +174,8 @@ async def test_configured_storage_api(request: Request, config_id: int, user: di
             "config_id": config_id,
             "provider_type": p_type,
             "connected": connected,
+            "needs_oauth": res.get("stage") == "oauth_action_required" if hasattr(provider, "verify_connection_detailed") else False,
+            "auth_url": res.get("auth_url") if hasattr(provider, "verify_connection_detailed") else None,
             "message": message
         }
     except Exception as exc:
@@ -255,6 +259,90 @@ async def upload_key_api(request: Request, user: dict = Depends(require_auth)):
         }
     else:
         raise HTTPException(status_code=400, detail="Unrecognized Google JSON key format. Must be either a Service Account JSON or an OAuth 2.0 Client ID JSON.")
+
+
+@router.post("/api/v1/storage/gdrive/start-oauth")
+async def start_oauth_api(request: Request, user: dict = Depends(require_auth)):
+    """Launch Google OAuth consent flow with an ephemeral listener in a background thread."""
+    import threading
+    import webbrowser
+    import wsgiref.simple_server
+    from google_auth_oauthlib.flow import (
+        InstalledAppFlow,
+        _RedirectWSGIApp,
+        _ExclusiveWSGIServer,
+        _WSGIRequestHandler
+    )
+
+    client_path = Path("keys/client_secret.json")
+    if not client_path.is_file():
+        raise HTTPException(status_code=400, detail="keys/client_secret.json not found on server.")
+
+    SCOPES = ["https://www.googleapis.com/auth/drive"]
+    flow = InstalledAppFlow.from_client_secrets_file(str(client_path), SCOPES)
+
+    # Spin up ephemeral WSGI server matching Google loopback strategy
+    wsgi_app = _RedirectWSGIApp("Authentication successful! You can now close this tab and return to the Backup Service console.")
+    local_server = wsgiref.simple_server.make_server(
+        "localhost",
+        0,
+        wsgi_app,
+        server_class=_ExclusiveWSGIServer,
+        handler_class=_WSGIRequestHandler
+    )
+    port = local_server.server_port
+    flow.redirect_uri = f"http://localhost:{port}/"
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+
+    def _listen():
+        try:
+            local_server.timeout = 180
+            local_server.handle_request()
+            if hasattr(wsgi_app, "last_request_uri") and wsgi_app.last_request_uri:
+                auth_resp = wsgi_app.last_request_uri.replace("http:", "https:")
+                flow.fetch_token(authorization_response=auth_resp)
+                creds = flow.credentials
+                token_text = creds.to_json()
+                keys_dir = Path("keys")
+                keys_dir.mkdir(parents=True, exist_ok=True)
+                for tf in [keys_dir / "token.json", keys_dir / "vipuljain2806token.json"]:
+                    tf.write_text(token_text, encoding="utf-8")
+        except Exception as exc:
+            logger.warning(f"OAuth background callback error: {exc}")
+        finally:
+            try:
+                local_server.server_close()
+            except Exception:
+                pass
+
+    threading.Thread(target=_listen, daemon=True).start()
+
+    # Automatically trigger user browser
+    try:
+        webbrowser.open(auth_url)
+    except Exception:
+        pass
+
+    return {
+        "status": "started",
+        "auth_url": auth_url,
+        "port": port,
+        "message": "Google Authorization consent screen has opened in your browser. If it did not open, click the button below."
+    }
+
+
+@router.get("/api/v1/storage/gdrive/oauth-status")
+async def check_oauth_status(request: Request, user: dict = Depends(require_auth)):
+    """Check if token.json has been generated and is valid."""
+    keys_dir = Path("keys")
+    token_1 = keys_dir / "token.json"
+    token_2 = keys_dir / "vipuljain2806token.json"
+    is_authorized = token_1.is_file() or token_2.is_file()
+    active_token = str(token_1 if token_1.is_file() else (token_2 if token_2.is_file() else ""))
+    return {
+        "authorized": is_authorized,
+        "token_file": active_token if is_authorized else None
+    }
 
 
 @router.get("/storage/gdrive/authorize")

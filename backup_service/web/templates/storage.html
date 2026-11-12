@@ -33,11 +33,18 @@
         </span>
       </div>
       <p class="text-xs text-gray-500">Protected by AES-256-GCM Vault</p>
-      <div class="pt-4 border-t border-gray-100 flex items-center justify-between">
+      <div class="pt-4 border-t border-gray-100 flex items-center justify-between gap-2">
         <span class="text-xs text-green-600 font-semibold">&bull; Configured</span>
-        <button onclick="testConfiguredStorage({{ sc.id }}, '{{ sc.provider_type }}', this)" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded text-gray-700 transition">
-          Test Access
-        </button>
+        <div class="flex items-center space-x-2">
+          <button onclick="testConfiguredStorage({{ sc.id }}, '{{ sc.provider_type }}', this)" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded text-gray-700 transition">
+            Test Access
+          </button>
+          {% if sc.provider_type == 'gdrive' %}
+          <button onclick="triggerGoogleOAuth(this)" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-xs font-semibold rounded text-white shadow-xs transition inline-flex items-center space-x-1" title="Authorize Google Account">
+            <span>🔑 Authorize</span>
+          </button>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% endfor %}
@@ -206,6 +213,28 @@
               <input type="text" name="gdrive_token_file" id="gdrive_token_file" placeholder="./token.json" value="./token.json" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono">
               <span class="text-xs text-gray-500 mt-1 block">Generated and refreshed automatically after initial interactive sign-in.</span>
             </div>
+          </div>
+
+          <!-- Prominent In-Form Authorize with Google Card -->
+          <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-300 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+            <div class="space-y-1">
+              <div class="flex items-center space-x-2">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-xs shadow-sm">G</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-900">Google OAuth Account Authorization</span>
+              </div>
+              <p class="text-xs text-blue-800">
+                Grant permission for this backup service to access your Google Drive root folder.
+              </p>
+              <div id="oauth-form-status-text" class="text-xs font-mono text-gray-600">
+                Status: Ready to authorize
+              </div>
+            </div>
+            <button type="button" id="btn-oauth-form" onclick="triggerGoogleOAuth(this)" class="inline-flex items-center space-x-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-lg shadow transition">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/>
+              </svg>
+              <span>Authorize with Google</span>
+            </button>
           </div>
         </div>
       </div>
@@ -775,10 +804,65 @@
 
   </div>
 </div>
+
+<!-- ========================================================================= -->
+<!-- Modal: Storage Test Connection Result (Interactive Dialog with Auth)     -->
+<!-- ========================================================================= -->
+<div id="modal-test-result" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden p-4 backdrop-filter backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full flex flex-col overflow-hidden animate-fade-in border border-gray-200">
+    <div id="test-result-header" class="px-6 py-4 flex items-center justify-between text-white bg-blue-600 transition-colors">
+      <div class="flex items-center space-x-2.5">
+        <span id="test-result-icon" class="text-xl">🔍</span>
+        <h3 id="test-result-title" class="text-base font-bold">Storage Verification</h3>
+      </div>
+      <button onclick="closeTestResultModal()" class="text-white hover:text-gray-200 rounded-lg p-1 transition focus:outline-none">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    
+    <div class="p-6 space-y-4 text-sm text-gray-700">
+      <div id="test-result-status-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"></div>
+      
+      <div id="test-result-message" class="p-3.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-line text-gray-800 leading-relaxed max-h-48 overflow-y-auto"></div>
+
+      <!-- Action Panel for OAuth Authorization Required -->
+      <div id="test-result-oauth-action" class="hidden p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping"></span>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-blue-900">One-Click Authorization Required</h4>
+        </div>
+        <p class="text-xs text-blue-800">
+          Your OAuth Client ID is valid, but your Google Account needs to grant Drive permission. Click the button below:
+        </p>
+        <button type="button" id="btn-modal-authorize" onclick="triggerGoogleOAuth(this)" class="w-full inline-flex items-center justify-center space-x-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-lg shadow transition">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+            <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/>
+          </svg>
+          <span id="btn-modal-authorize-text">Authorize with Google</span>
+        </button>
+        <div id="oauth-modal-status-text" class="text-center text-xs font-semibold text-blue-700"></div>
+        <div id="oauth-manual-link-container" class="hidden text-center pt-2 border-t border-blue-200">
+          <a id="oauth-manual-link" href="#" target="_blank" class="text-xs text-blue-700 underline font-semibold hover:text-blue-900">
+            Click here if Google consent window didn't open &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+      <span class="text-xs text-gray-500 font-mono">STAR Backup Engine v1.0</span>
+      <button type="button" onclick="closeTestResultModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-semibold rounded-lg transition">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+let oauthPollInterval = null;
+
 // Toggle provider fields in form
 function switchProviderFields(provider) {
   ['gdrive', 'onedrive', 's3_terabox', 'local'].forEach(p => {
@@ -811,12 +895,10 @@ function openStorageGuideModal(provider, subSection) {
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
   }
-
-  // Switch to the requested provider tab
   switchMainStorageTab(provider || 'gdrive');
 }
 
-// Close Modal
+// Close Guide Modal
 function closeStorageGuideModal() {
   const modal = document.getElementById('modal-storage-guide');
   if (modal) {
@@ -847,10 +929,148 @@ function switchMainStorageTab(providerId) {
   });
 }
 
-// Close modal on Escape key press
+// Open Interactive Test Result Modal
+function showTestResultModal(options) {
+  const modal = document.getElementById('modal-test-result');
+  const header = document.getElementById('test-result-header');
+  const icon = document.getElementById('test-result-icon');
+  const title = document.getElementById('test-result-title');
+  const badge = document.getElementById('test-result-status-badge');
+  const msg = document.getElementById('test-result-message');
+  const oauthAction = document.getElementById('test-result-oauth-action');
+  const oauthLink = document.getElementById('oauth-manual-link');
+  const oauthLinkContainer = document.getElementById('oauth-manual-link-container');
+  const modalAuthBtnText = document.getElementById('btn-modal-authorize-text');
+
+  title.innerText = options.title || "Storage Connection Diagnostic";
+  msg.innerText = options.message || "";
+
+  if (options.connected) {
+    header.className = "px-6 py-4 flex items-center justify-between text-white bg-green-600 transition-colors";
+    icon.innerText = "✅";
+    badge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800";
+    badge.innerHTML = "● Connection Verified &amp; Ready";
+    oauthAction.classList.add('hidden');
+  } else if (options.needs_oauth) {
+    header.className = "px-6 py-4 flex items-center justify-between text-white bg-blue-600 transition-colors";
+    icon.innerText = "🔑";
+    badge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300";
+    badge.innerHTML = "⚠️ Google Account Authorization Required";
+    oauthAction.classList.remove('hidden');
+
+    if (options.auth_url) {
+      oauthLink.href = options.auth_url;
+      oauthLinkContainer.classList.remove('hidden');
+    } else {
+      oauthLinkContainer.classList.add('hidden');
+    }
+    if (modalAuthBtnText) modalAuthBtnText.innerText = "Authorize with Google";
+  } else {
+    header.className = "px-6 py-4 flex items-center justify-between text-white bg-red-600 transition-colors";
+    icon.innerText = "❌";
+    badge.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800";
+    badge.innerHTML = "● Verification Failed";
+    oauthAction.classList.add('hidden');
+  }
+
+  modal.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+}
+
+// Close Test Result Modal
+function closeTestResultModal() {
+  const modal = document.getElementById('modal-test-result');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+}
+
+// Trigger Google OAuth authorization flow
+async function triggerGoogleOAuth(btn) {
+  const originalHtml = btn ? btn.innerHTML : null;
+  const statusText = document.getElementById('oauth-modal-status-text');
+  const formStatus = document.getElementById('oauth-form-status-text');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="inline-flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>Opening Google Sign-In...</span>';
+  }
+  if (statusText) statusText.innerText = "Initiating Google authorization...";
+  if (formStatus) formStatus.innerText = "Initiating Google authorization...";
+
+  try {
+    const res = await fetch('/api/v1/storage/gdrive/start-oauth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (res.ok && data.status === 'started') {
+      if (statusText) statusText.innerText = "Waiting for authorization in browser window...";
+      if (formStatus) formStatus.innerText = "Waiting for authorization in browser window...";
+
+      if (data.auth_url) {
+        window.open(data.auth_url, '_blank');
+        const manualLink = document.getElementById('oauth-manual-link');
+        const manualContainer = document.getElementById('oauth-manual-link-container');
+        if (manualLink && manualContainer) {
+          manualLink.href = data.auth_url;
+          manualContainer.classList.remove('hidden');
+        }
+      }
+
+      // Start polling for token creation
+      if (oauthPollInterval) clearInterval(oauthPollInterval);
+      oauthPollInterval = setInterval(async () => {
+        try {
+          const pollRes = await fetch('/api/v1/storage/gdrive/oauth-status');
+          const pollData = await pollRes.json();
+          if (pollData.authorized) {
+            clearInterval(oauthPollInterval);
+            oauthPollInterval = null;
+
+            if (statusText) statusText.innerText = "✅ Google Account authorized successfully!";
+            if (formStatus) formStatus.innerText = "✅ Google Account authorized successfully!";
+            if (btn) {
+              btn.innerHTML = '<span>✅ Authorized!</span>';
+              btn.className = btn.className.replace('bg-blue-600', 'bg-green-600');
+            }
+
+            // Update modal status
+            showTestResultModal({
+              connected: true,
+              title: "Google Drive Authorization Complete",
+              message: "Google OAuth credentials have been generated and saved to keys/token.json.\nStorage destination is now ready for enterprise backups!",
+              needs_oauth: false
+            });
+          }
+        } catch (e) {
+          console.error("OAuth polling error:", e);
+        }
+      }, 2000);
+
+    } else {
+      alert(`❌ Error starting OAuth: ${data.detail || data.message || 'Unknown error'}`);
+      if (btn) {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+      }
+    }
+  } catch (err) {
+    alert(`❌ Request Error: ${err.message}`);
+    if (btn) {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  }
+}
+
+// Close modals on Escape key press
 document.addEventListener('keydown', function(event) {
   if (event.key === 'Escape') {
     closeStorageGuideModal();
+    closeTestResultModal();
   }
 });
 
@@ -866,18 +1086,26 @@ async function testConfiguredStorage(id, type, btn) {
       headers: { 'Content-Type': 'application/json' }
     });
     const data = await res.json();
-    if (res.ok && data.connected) {
-      alert(`✅ Storage Gateway Verified:\n${data.message}`);
-    } else {
-      alert(`❌ Connection Test Result:\n${data.message || 'Verification failed. Please review credentials.'}`);
-    }
+    showTestResultModal({
+      connected: data.connected,
+      title: `Storage Gateway #${id} (${type.toUpperCase()})`,
+      message: data.message,
+      needs_oauth: data.needs_oauth,
+      auth_url: data.auth_url
+    });
   } catch (err) {
-    alert(`❌ Network or Server Error: ${err.message}`);
+    showTestResultModal({
+      connected: false,
+      title: `Storage Gateway #${id} (${type.toUpperCase()})`,
+      message: `Network or Server Error: ${err.message}`,
+      needs_oauth: false
+    });
   } finally {
     btn.innerHTML = originalHtml;
     btn.disabled = false;
   }
 }
+
 // Test current form inputs before saving
 async function testCurrentFormStorage(btn) {
   const provider = document.getElementById('provider-select').value;
@@ -923,18 +1151,26 @@ async function testCurrentFormStorage(btn) {
       body: JSON.stringify({ provider_type: provider, credentials: credentials })
     });
     const data = await res.json();
-    if (res.ok && data.connected) {
-      alert(`✅ Storage Connection Verified Successfully:\n${data.message}`);
-    } else {
-      alert(`❌ Storage Connection Test Result:\n${data.message || 'Verification failed. Review credentials.'}`);
-    }
+    showTestResultModal({
+      connected: data.connected,
+      title: `Credentials Test (${provider.toUpperCase()})`,
+      message: data.message,
+      needs_oauth: data.needs_oauth,
+      auth_url: data.auth_url
+    });
   } catch (err) {
-    alert(`❌ Request Error: ${err.message}`);
+    showTestResultModal({
+      connected: false,
+      title: `Credentials Test (${provider.toUpperCase()})`,
+      message: `Request Error: ${err.message}`,
+      needs_oauth: false
+    });
   } finally {
     btn.innerHTML = origText;
     btn.disabled = false;
   }
 }
+
 function handleGdriveFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;

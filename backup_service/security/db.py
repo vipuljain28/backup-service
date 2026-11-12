@@ -576,3 +576,49 @@ class DatabaseManager:
                 (limit,)
             )
             return [dict(row) for row in cur.fetchall()]
+
+    def list_all_schedules(self) -> List[Dict[str, Any]]:
+        with self.connection() as conn:
+            cur = conn.execute(
+                """
+                SELECT s.*, c.display_name AS client_name, c.client_id AS client_slug
+                FROM backup_schedules s
+                JOIN clients c ON s.client_id = c.id
+                ORDER BY s.id ASC
+                """
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def get_backup_schedule(self, schedule_id: int) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            cur = conn.execute("SELECT * FROM backup_schedules WHERE id = ?", (schedule_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def add_backup_schedule(self, client_id: int, name: str, cron_expression: str, is_enabled: int = 1) -> int:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO backup_schedules (client_id, name, cron_expression, is_enabled, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (client_id, name, cron_expression, is_enabled, now_iso),
+            )
+            return cur.lastrowid
+
+    def toggle_backup_schedule(self, schedule_id: int, is_enabled: int) -> bool:
+        with self.connection() as conn:
+            cur = conn.execute(
+                "UPDATE backup_schedules SET is_enabled = ? WHERE id = ?",
+                (is_enabled, schedule_id),
+            )
+            return cur.rowcount > 0
+
+    def delete_backup_schedule(self, schedule_id: int) -> bool:
+        with self.connection() as conn:
+            cur = conn.execute(
+                "DELETE FROM backup_schedules WHERE id = ?", (schedule_id,)
+            )
+            return cur.rowcount > 0
+

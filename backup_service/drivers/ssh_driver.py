@@ -8,6 +8,7 @@ Connects to a remote Linux server from localhost to perform:
 
 import os
 import json
+import shlex
 import logging
 from pathlib import Path
 from typing import Generator, List, Optional
@@ -164,10 +165,10 @@ class SSHDriver(SourceDriver):
         """Verify database connectivity and credentials without dumping data."""
         client = self._get_client()
         if db_config.engine in ("mysql", "mariadb"):
-            pwd_clause = f"-p'{db_config.password}'" if db_config.password else ""
+            pwd_clause = f"--password={shlex.quote(db_config.password)}" if db_config.password else ""
             test_cmd = (
-                f"mysql -h {db_config.host} -P {db_config.port} -u {db_config.user} "
-                f"{pwd_clause} {db_config.db_name} -e 'SELECT 1;' 2>&1"
+                f"mysql -h {shlex.quote(str(db_config.host))} -P {db_config.port} -u {shlex.quote(db_config.user)} "
+                f"{pwd_clause} {shlex.quote(db_config.db_name)} -e 'SELECT 1;' 2>&1"
             )
             stdin, stdout, stderr = client.exec_command(test_cmd, timeout=10)
             output = stdout.read().decode("utf-8", errors="ignore").strip()
@@ -179,10 +180,10 @@ class SSHDriver(SourceDriver):
                 )
             logger.info("[DRY RUN] Verified MySQL database access for '%s' (DB: %s)", db_config.name, db_config.db_name)
         elif db_config.engine == "postgres":
-            pwd_env = f"PGPASSWORD='{db_config.password}' " if db_config.password else ""
+            pwd_env = f"PGPASSWORD={shlex.quote(db_config.password)} " if db_config.password else ""
             test_cmd = (
-                f"{pwd_env}psql -h {db_config.host} -p {db_config.port} -U {db_config.user} "
-                f"-d {db_config.db_name} -c 'SELECT 1;' 2>&1"
+                f"{pwd_env}psql -h {shlex.quote(str(db_config.host))} -p {db_config.port} -U {shlex.quote(db_config.user)} "
+                f"-d {shlex.quote(db_config.db_name)} -c 'SELECT 1;' 2>&1"
             )
             stdin, stdout, stderr = client.exec_command(test_cmd, timeout=10)
             output = stdout.read().decode("utf-8", errors="ignore").strip()
@@ -207,21 +208,21 @@ class SSHDriver(SourceDriver):
         client = self._get_client()
 
         if db_config.engine in ("mysql", "mariadb"):
-            pwd_clause = f"-p'{db_config.password}'" if db_config.password else ""
+            pwd_clause = f"--password={shlex.quote(db_config.password)}" if db_config.password else ""
             opts = " ".join(db_config.dump_options)
             inner_cmd = (
-                f"mysqldump -h {db_config.host} -P {db_config.port} -u {db_config.user} "
-                f"{pwd_clause} {opts} {db_config.db_name} | gzip -c"
+                f"mysqldump -h {shlex.quote(str(db_config.host))} -P {db_config.port} -u {shlex.quote(db_config.user)} "
+                f"{pwd_clause} {opts} {shlex.quote(db_config.db_name)} | gzip -c"
             )
-            remote_cmd = f"bash -c 'set -o pipefail; {inner_cmd}'"
+            remote_cmd = f"bash -c {shlex.quote('set -o pipefail; ' + inner_cmd)}"
         elif db_config.engine == "postgres":
-            pwd_env = f"PGPASSWORD='{db_config.password}' " if db_config.password else ""
+            pwd_env = f"PGPASSWORD={shlex.quote(db_config.password)} " if db_config.password else ""
             opts = " ".join(db_config.dump_options)
             inner_cmd = (
-                f"{pwd_env}pg_dump -h {db_config.host} -p {db_config.port} -U {db_config.user} "
-                f"{opts} {db_config.db_name} | gzip -c"
+                f"{pwd_env}pg_dump -h {shlex.quote(str(db_config.host))} -p {db_config.port} -U {shlex.quote(db_config.user)} "
+                f"{opts} {shlex.quote(db_config.db_name)} | gzip -c"
             )
-            remote_cmd = f"bash -c 'set -o pipefail; {inner_cmd}'"
+            remote_cmd = f"bash -c {shlex.quote('set -o pipefail; ' + inner_cmd)}"
         else:
             raise ValueError(f"Unsupported database engine: {db_config.engine}")
 

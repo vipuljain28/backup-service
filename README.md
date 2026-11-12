@@ -1,12 +1,16 @@
-# Enterprise Backup & Disaster Recovery Management Platform
+# TechLIMS Enterprise Backup & Disaster Recovery Platform
 
-[![Architecture: Clean Layered & SOLID](https://img.shields.io/badge/Architecture-SOLID%20%26%20Clean%20Layered-blue.svg)](file:///g:/projects/star/backup_service)
-[![Security: OWASP Top 10 & AES--256--GCM](https://img.shields.io/badge/Security-OWASP%20Compliant%20%2F%20AES--256--GCM-red.svg)](file:///g:/projects/star/backup_service/security/vault.py)
-[![Storage: Google Drive | OneDrive | Local | S3](https://img.shields.io/badge/Cloud%20Storage-GDrive%20%7C%20OneDrive%20%7C%20Local%20%7C%20S3-brightgreen.svg)](file:///g:/projects/star/backup_service/storage)
-[![Tests: 12/12 Automated Pass](https://img.shields.io/badge/Tests-12%2F12%20Pass%20(100%25)-green.svg)](file:///g:/projects/star/backup_service/tests/test_report.html)
-[![CI/CD: GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blueviolet.svg)](file:///g:/projects/star/.github/workflows/ci.yml)
+[![Live Website: GitHub Pages](https://img.shields.io/badge/Live%20Website-GitHub%20Pages-2563eb.svg)](https://vipuljain28.github.io/backup-service/)
+[![Architecture: Clean Layered & SOLID](https://img.shields.io/badge/Architecture-SOLID%20%26%20Clean%20Layered-blue.svg)](https://vipuljain28.github.io/backup-service/#architecture)
+[![Security: OWASP Top 10 & AES--256--GCM](https://img.shields.io/badge/Security-OWASP%20Compliant%20%2F%20AES--256--GCM-red.svg)](https://vipuljain28.github.io/backup-service/#security)
+[![2FA: RFC 6238 TOTP](https://img.shields.io/badge/2FA-RFC%206238%20TOTP-purple.svg)](https://vipuljain28.github.io/backup-service/#security)
+[![Storage: Google Drive | OneDrive | Local | S3](https://img.shields.io/badge/Cloud%20Storage-GDrive%20%7C%20OneDrive%20%7C%20Local%20%7C%20S3-brightgreen.svg)](https://vipuljain28.github.io/backup-service/)
+[![Tests: 22/22 Automated Pass](https://img.shields.io/badge/Tests-22%2F22%20Pass%20(100%25)-green.svg)](https://github.com/vipuljain28/backup-service/actions)
+[![CI/CD: GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blueviolet.svg)](https://github.com/vipuljain28/backup-service/actions)
 
-An enterprise-grade, secure Web Application & Management Platform for automated multi-tenant backups, point-in-time disaster recovery, and hybrid multi-cloud synchronization.
+🌐 **Official Project Website & Documentation:** [https://vipuljain28.github.io/backup-service/](https://vipuljain28.github.io/backup-service/)
+
+An enterprise-grade, secure Web Application & Management Platform for automated multi-tenant backups, point-in-time disaster recovery, and hybrid multi-cloud synchronization. Built by **TechLIMS**.
 
 Designed in accordance with **SOLID Object-Oriented Principles**, **OWASP Security Standards**, and **GoF System Design Patterns**.
 

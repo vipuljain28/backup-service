@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - TechLIMS{% endblock %}
+{% block header_title %}User & Access Management{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header Action Bar -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900">Platform Users & Role-Based Access (RBAC)</h2>
+      <p class="text-xs text-gray-500 mt-0.5">Manage operator accounts, assign permission roles, and monitor MFA security status.</p>
+    </div>
+    <button
+      onclick="openCreateUserModal()"
+      class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm flex items-center space-x-2 transition"
+    >
+      <span>+</span>
+      <span>Add New User</span>
+    </button>
+  </div>
+
+  <!-- Feedback Alert -->
+  <div id="alert-box" class="hidden p-4 rounded-xl text-sm font-medium"></div>
+
+  <!-- Users Table Card -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead class="bg-gray-50 text-gray-500 uppercase tracking-wider font-semibold border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3.5">User</th>
+            <th class="px-6 py-3.5">Email</th>
+            <th class="px-6 py-3.5">Role</th>
+            <th class="px-6 py-3.5">Two-Factor (TOTP)</th>
+            <th class="px-6 py-3.5">Status</th>
+            <th class="px-6 py-3.5">Last Login</th>
+            <th class="px-6 py-3.5 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 text-gray-700 font-medium">
+          {% for u in users %}
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-6 py-4 flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                {{ u.username[0]|upper }}
+              </div>
+              <div>
+                <span class="font-bold text-gray-900">{{ u.username }}</span>
+                {% if u.id == user.id %}
+                <span class="ml-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-mono font-semibold">You</span>
+                {% endif %}
+              </div>
+            </td>
+            <td class="px-6 py-4 text-gray-500">
+              {{ u.email or '—' }}
+            </td>
+            <td class="px-6 py-4">
+              {% if u.role == 'admin' %}
+              <span class="px-2.5 py-1 text-[11px] font-bold rounded-full bg-purple-100 text-purple-800 border border-purple-200">ADMIN</span>
+              {% elif u.role == 'operator' %}
+              <span class="px-2.5 py-1 text-[11px] font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">OPERATOR</span>
+              {% else %}
+              <span class="px-2.5 py-1 text-[11px] font-bold rounded-full bg-gray-100 text-gray-800 border border-gray-200">AUDITOR</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">
+              {% if u.mfa_enabled %}
+              <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5"></span> Enabled
+              </span>
+              {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200">
+                Disabled
+              </span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">
+              {% if u.is_active %}
+              <span class="text-green-700 font-semibold">Active</span>
+              {% else %}
+              <span class="text-red-600 font-semibold">Disabled</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 font-mono text-[11px] text-gray-500">
+              {{ u.last_login_at[:19] if u.last_login_at else 'Never' }}
+            </td>
+            <td class="px-6 py-4 text-right space-x-2">
+              <button
+                onclick="openEditUserModal({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role }}', {{ 1 if u.is_active else 0 }})"
+                class="text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+              >
+                Edit
+              </button>
+              <button
+                onclick="openResetPasswordModal({{ u.id }}, '{{ u.username }}')"
+                class="text-gray-600 hover:text-gray-900 font-semibold hover:underline"
+              >
+                Reset Pwd
+              </button>
+              {% if u.id != user.id %}
+              <button
+                onclick="deleteUser({{ u.id }}, '{{ u.username }}')"
+                class="text-red-600 hover:text-red-800 font-semibold hover:underline"
+              >
+                Delete
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- Create User Modal -->
+<!-- ========================================================================= -->
+<div id="create-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-70 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <button onclick="closeCreateModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+    <h3 class="text-lg font-bold text-gray-900 mb-1">Create New Platform User</h3>
+    <p class="text-xs text-gray-500 mb-4">Provision a new account with RBAC privileges.</p>
+
+    <form onsubmit="handleCreateUser(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Username</label>
+        <input type="text" id="create-username" required placeholder="e.g. jdoe" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Email</label>
+        <input type="email" id="create-email" placeholder="user@techlims.local" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">RBAC Role</label>
+        <select id="create-role" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="operator">Operator (Can trigger backups and restores)</option>
+          <option value="admin">Administrator (Full superuser privileges)</option>
+          <option value="auditor">Auditor (Strictly read-only access)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Initial Password</label>
+        <input type="password" id="create-password" required placeholder="Must meet complexity rules" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <p class="text-[11px] text-gray-400 mt-1">Min 8 chars, uppercase, lowercase, number, special symbol.</p>
+      </div>
+      <div class="flex space-x-2 pt-2">
+        <button type="button" onclick="closeCreateModal()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg">Cancel</button>
+        <button type="submit" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm">Create Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- Edit User Modal -->
+<!-- ========================================================================= -->
+<div id="edit-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-70 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <button onclick="closeEditModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+    <h3 class="text-lg font-bold text-gray-900 mb-1">Edit User: <span id="edit-username-label" class="text-blue-600"></span></h3>
+    <p class="text-xs text-gray-500 mb-4">Modify account role, contact email, and active access status.</p>
+
+    <form onsubmit="handleEditUser(event)" class="space-y-4">
+      <input type="hidden" id="edit-user-id">
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Email</label>
+        <input type="email" id="edit-email" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">RBAC Role</label>
+        <select id="edit-role" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="operator">Operator</option>
+          <option value="admin">Administrator</option>
+          <option value="auditor">Auditor</option>
+        </select>
+      </div>
+      <div class="flex items-center space-x-2 pt-1">
+        <input type="checkbox" id="edit-is-active" class="h-4 w-4 text-blue-600 rounded">
+        <label for="edit-is-active" class="text-xs font-bold text-gray-700">Account Active (Permit login)</label>
+      </div>
+      <div class="flex space-x-2 pt-2">
+        <button type="button" onclick="closeEditModal()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg">Cancel</button>
+        <button type="submit" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- Reset Password Modal -->
+<!-- ========================================================================= -->
+<div id="reset-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-70 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <button onclick="closeResetModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+    <h3 class="text-lg font-bold text-gray-900 mb-1">Administrative Password Reset</h3>
+    <p class="text-xs text-gray-500 mb-4">Resetting the password for <span id="reset-username-label" class="font-bold text-blue-600"></span> will immediately invalidate all their active login tokens.</p>
+
+    <form onsubmit="handleResetPassword(event)" class="space-y-4">
+      <input type="hidden" id="reset-user-id">
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">New Temporary/Permanent Password</label>
+        <input type="password" id="reset-new-password" required placeholder="Must meet complexity rules" class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <p class="text-[11px] text-gray-400 mt-1">Min 8 chars, uppercase, lowercase, number, special symbol.</p>
+      </div>
+      <div class="flex space-x-2 pt-2">
+        <button type="button" onclick="closeResetModal()" class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg">Cancel</button>
+        <button type="submit" class="flex-1 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-sm">Reset Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function showAlert(msg, isSuccess) {
+    const box = document.getElementById('alert-box');
+    box.textContent = msg;
+    box.className = `p-4 rounded-xl text-sm font-medium ${isSuccess ? 'bg-green-100 border border-green-300 text-green-900' : 'bg-red-100 border border-red-300 text-red-900'}`;
+    box.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Create User
+  function openCreateUserModal() {
+    document.getElementById('create-modal').classList.remove('hidden');
+    document.getElementById('create-username').focus();
+  }
+  function closeCreateModal() {
+    document.getElementById('create-modal').classList.add('hidden');
+  }
+  async function handleCreateUser(e) {
+    e.preventDefault();
+    const username = document.getElementById('create-username').value;
+    const email = document.getElementById('create-email').value;
+    const role = document.getElementById('create-role').value;
+    const password = document.getElementById('create-password').value;
+
+    try {
+      const res = await fetch('/api/v1/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, role, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'User creation failed.');
+
+      closeCreateModal();
+      showAlert(data.message, true);
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  // Edit User
+  function openEditUserModal(id, username, email, role, isActive) {
+    document.getElementById('edit-user-id').value = id;
+    document.getElementById('edit-username-label').textContent = username;
+    document.getElementById('edit-email').value = email;
+    document.getElementById('edit-role').value = role;
+    document.getElementById('edit-is-active').checked = (isActive === 1);
+    document.getElementById('edit-modal').classList.remove('hidden');
+  }
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.add('hidden');
+  }
+  async function handleEditUser(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-user-id').value;
+    const email = document.getElementById('edit-email').value;
+    const role = document.getElementById('edit-role').value;
+    const is_active = document.getElementById('edit-is-active').checked;
+
+    try {
+      const res = await fetch(`/api/v1/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role, is_active })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Update failed.');
+
+      closeEditModal();
+      showAlert(data.message, true);
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  // Reset Password
+  function openResetPasswordModal(id, username) {
+    document.getElementById('reset-user-id').value = id;
+    document.getElementById('reset-username-label').textContent = username;
+    document.getElementById('reset-new-password').value = '';
+    document.getElementById('reset-modal').classList.remove('hidden');
+  }
+  function closeResetModal() {
+    document.getElementById('reset-modal').classList.add('hidden');
+  }
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    const id = document.getElementById('reset-user-id').value;
+    const new_password = document.getElementById('reset-new-password').value;
+
+    try {
+      const res = await fetch(`/api/v1/users/${id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Reset failed.');
+
+      closeResetModal();
+      showAlert(data.message, true);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  // Delete User
+  async function deleteUser(id, username) {
+    if (!confirm(`Are you sure you want to permanently delete user '${username}'?`)) return;
+
+    try {
+      const res = await fetch(`/api/v1/users/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Deletion failed.');
+
+      showAlert(data.message, true);
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err) {
+      showAlert(err.message, false);
+    }
+  }
+</script>
+{% endblock %}

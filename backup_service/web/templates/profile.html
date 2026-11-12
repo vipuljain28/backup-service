@@ -1,0 +1,469 @@
+{% extends "base.html" %}
+
+{% block title %}Profile & Security - TechLIMS{% endblock %}
+{% block header_title %}Profile & Security Management{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  <!-- Feedback Banners -->
+  <div id="alert-box" class="hidden p-4 rounded-xl text-sm font-medium"></div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Column 1: Account Overview & Details -->
+    <div class="lg:col-span-1 space-y-6">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center space-x-4 mb-5">
+          <div class="w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-md">
+            {{ user.username[0]|upper }}
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-gray-900">{{ user.username }}</h2>
+            <p class="text-xs text-gray-500">{{ user.email or 'No email registered' }}</p>
+            <span class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider rounded-full bg-blue-100 text-blue-800">
+              {{ user.role }}
+            </span>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-100 pt-4 space-y-3 text-xs text-gray-600">
+          <div class="flex justify-between">
+            <span class="text-gray-400">Account ID:</span>
+            <span class="font-mono font-semibold text-gray-700">#{{ user.id }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-400">Security Token Version:</span>
+            <span class="font-mono font-semibold text-gray-700">v{{ user.token_version }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-400">Last Sign-In:</span>
+            <span class="font-mono text-gray-700">{{ user.last_login_at[:19] if user.last_login_at else 'Active Session' }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-400">Created:</span>
+            <span class="font-mono text-gray-700">{{ user.created_at[:10] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Guidance Card -->
+      <div class="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-xl p-5 shadow-sm text-xs space-y-2">
+        <h4 class="font-bold text-blue-400 flex items-center space-x-1.5">
+          <span>🛡️</span>
+          <span>Enterprise IAM Policy</span>
+        </h4>
+        <p class="text-gray-300 leading-relaxed">
+          TechLIMS enforces token revocation and sliding-window rate limiting. Changing your password or updating 2FA settings immediately invalidates all other active login tokens across all devices.
+        </p>
+      </div>
+    </div>
+
+    <!-- Column 2 & 3: Password & Multi-Factor Authentication -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <!-- MFA Management Card -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-start justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+              <span>Two-Factor Authentication (TOTP)</span>
+              {% if user.mfa_enabled %}
+              <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+                Active & Protected
+              </span>
+              {% else %}
+              <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200">
+                Not Enabled
+              </span>
+              {% endif %}
+            </h3>
+            <p class="text-xs text-gray-500 mt-1">
+              RFC 6238 time-based one-time password security compatible with Google Authenticator, Microsoft Authenticator, and Bitwarden.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-5 p-4 rounded-xl {% if user.mfa_enabled %}bg-green-50 border border-green-200 text-green-900{% else %}bg-amber-50 border border-amber-200 text-amber-900{% endif %}">
+          {% if user.mfa_enabled %}
+          <div class="flex items-center space-x-3">
+            <span class="text-2xl">🔒</span>
+            <div class="flex-1 text-xs">
+              <p class="font-bold">Your account requires a 6-digit authenticator code on every sign-in.</p>
+              <p class="text-green-700 mt-0.5">Protected against password stuffing, dictionary attacks, and credential reuse.</p>
+            </div>
+            <button
+              onclick="openDisableMfaModal()"
+              class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-medium text-xs rounded-lg shadow-xs transition"
+            >
+              Disable 2FA
+            </button>
+          </div>
+          {% else %}
+          <div class="flex items-center space-x-3">
+            <span class="text-2xl">⚠️</span>
+            <div class="flex-1 text-xs">
+              <p class="font-bold">Single-factor authentication is active.</p>
+              <p class="text-amber-700 mt-0.5">Enable Two-Factor Authentication to secure backups and sensitive server credentials.</p>
+            </div>
+            <button
+              onclick="startMfaSetup()"
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm transition"
+            >
+              Setup 2FA (TOTP)
+            </button>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Change Password Card -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Change Account Password</h3>
+        <p class="text-xs text-gray-500 mb-5">
+          Must be at least 8 characters with uppercase, lowercase, numerical digit, and special symbol.
+        </p>
+
+        <form id="change-password-form" onsubmit="handleChangePassword(event)" class="space-y-4 max-w-lg">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Current Password</label>
+            <input
+              type="password"
+              id="current-password"
+              required
+              class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+            >
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">New Password</label>
+            <input
+              type="password"
+              id="new-password"
+              required
+              oninput="checkPasswordStrength(this.value)"
+              class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+            >
+            <!-- Password Strength Feedback -->
+            <div id="pwd-strength-container" class="mt-2 space-y-1 text-[11px] text-gray-500">
+              <div class="flex items-center space-x-2">
+                <span id="chk-len" class="text-gray-400">○ 8+ characters</span>
+                <span id="chk-upper" class="text-gray-400">○ Uppercase</span>
+                <span id="chk-lower" class="text-gray-400">○ Lowercase</span>
+                <span id="chk-digit" class="text-gray-400">○ Number</span>
+                <span id="chk-spec" class="text-gray-400">○ Special symbol</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Confirm New Password</label>
+            <input
+              type="password"
+              id="confirm-password"
+              required
+              class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+            >
+          </div>
+
+          <div class="pt-2">
+            <button
+              type="submit"
+              id="btn-change-pwd"
+              class="px-5 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-sm transition"
+            >
+              Update Password & Revoke Other Sessions
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MFA Enrollment Modal -->
+<!-- ========================================================================= -->
+<div id="mfa-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-70 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+    <button onclick="closeMfaModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+
+    <div class="text-center mb-4">
+      <div class="inline-flex p-3 rounded-full bg-blue-50 text-blue-600 text-2xl mb-2">📱</div>
+      <h3 class="text-lg font-bold text-gray-900">Setup Authenticator App (TOTP)</h3>
+      <p class="text-xs text-gray-500">Step 1 of 2: Scan QR Code with Google Authenticator or Microsoft Authenticator</p>
+    </div>
+
+    <!-- Step 1: QR Code & Secret Key -->
+    <div id="mfa-step-1" class="space-y-4">
+      <div class="flex justify-center p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <div id="qrcode-container" class="bg-white p-2 rounded-lg shadow-xs"></div>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-semibold uppercase text-gray-400 text-center mb-1">Or Enter Key Manually</label>
+        <div class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded-lg border border-gray-300">
+          <span id="mfa-secret-text" class="font-mono text-xs font-bold text-gray-800 tracking-wider flex-1 text-center select-all"></span>
+          <button onclick="copyMfaSecret()" class="px-2.5 py-1 bg-white border border-gray-300 hover:bg-gray-50 text-xs font-medium rounded shadow-2xs">Copy</button>
+        </div>
+      </div>
+
+      <!-- Recovery Codes Display -->
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs">
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="font-bold text-amber-900">⚠️ Emergency Backup Recovery Codes</span>
+          <button onclick="copyRecoveryCodes()" class="text-amber-800 hover:text-amber-900 underline font-semibold">Copy All</button>
+        </div>
+        <p class="text-amber-700 text-[11px] mb-2">Save these 8 codes. Each can be used once if you lose your phone:</p>
+        <div id="recovery-codes-grid" class="grid grid-cols-2 gap-1 font-mono text-[11px] font-bold text-gray-800 bg-white p-2 rounded border border-amber-200"></div>
+      </div>
+
+      <!-- Step 2: Verification Input -->
+      <div class="border-t border-gray-200 pt-4">
+        <label class="block text-xs font-bold text-gray-700 mb-1">Verify Authenticator Code</label>
+        <p class="text-[11px] text-gray-500 mb-2">Enter the 6-digit code currently shown in your authenticator app to confirm setup:</p>
+        <div class="flex space-x-2">
+          <input
+            type="text"
+            id="mfa-confirm-code"
+            maxlength="6"
+            pattern="[0-9]{6}"
+            placeholder="000000"
+            class="flex-1 text-center font-mono text-xl tracking-widest px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+          <button
+            onclick="confirmMfaSetup()"
+            id="btn-confirm-mfa"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm"
+          >
+            Activate 2FA
+          </button>
+        </div>
+        <p id="mfa-confirm-error" class="text-xs text-red-600 mt-1 hidden"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- Disable MFA Modal -->
+<!-- ========================================================================= -->
+<div id="disable-mfa-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-70 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <button onclick="closeDisableMfaModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+    <div class="text-center mb-4">
+      <div class="inline-flex p-3 rounded-full bg-red-50 text-red-600 text-2xl mb-2">⚠️</div>
+      <h3 class="text-lg font-bold text-gray-900">Disable Two-Factor Authentication</h3>
+      <p class="text-xs text-gray-500">Confirm your current account password to remove 2FA security.</p>
+    </div>
+
+    <form onsubmit="handleDisableMfa(event)" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Account Password</label>
+        <input
+          type="password"
+          id="disable-mfa-password"
+          required
+          placeholder="Enter current password"
+          class="w-full text-sm px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+      </div>
+      <div class="flex space-x-2 pt-2">
+        <button
+          type="button"
+          onclick="closeDisableMfaModal()"
+          class="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm"
+        >
+          Confirm Disable
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- QRCode JS Library (Client-Side Rendering) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+  let cachedRecoveryCodes = [];
+
+  function showAlert(msg, isSuccess) {
+    const box = document.getElementById('alert-box');
+    box.textContent = msg;
+    box.className = `p-4 rounded-xl text-sm font-medium ${isSuccess ? 'bg-green-100 border border-green-300 text-green-900' : 'bg-red-100 border border-red-300 text-red-900'}`;
+    box.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function checkPasswordStrength(val) {
+    const len = val.length >= 8;
+    const up = /[A-Z]/.test(val);
+    const low = /[a-z]/.test(val);
+    const num = /[0-9]/.test(val);
+    const spec = /[!@#$%^&*()\-_=+\[\]{}|;:,.<>?/~`]/.test(val);
+
+    updateBadge('chk-len', len, '8+ characters');
+    updateBadge('chk-upper', up, 'Uppercase');
+    updateBadge('chk-lower', low, 'Lowercase');
+    updateBadge('chk-digit', num, 'Number');
+    updateBadge('chk-spec', spec, 'Special symbol');
+  }
+
+  function updateBadge(id, valid, label) {
+    const el = document.getElementById(id);
+    el.className = valid ? 'text-green-600 font-semibold' : 'text-gray-400';
+    el.textContent = `${valid ? '✓' : '○'} ${label}`;
+  }
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    const current_password = document.getElementById('current-password').value;
+    const new_password = document.getElementById('new-password').value;
+    const confirm_password = document.getElementById('confirm-password').value;
+    const btn = document.getElementById('btn-change-pwd');
+
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+      const res = await fetch('/api/v1/profile/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password, new_password, confirm_password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Password update failed.');
+
+      showAlert(data.message || 'Password changed successfully!', true);
+      document.getElementById('change-password-form').reset();
+    } catch (err) {
+      showAlert(err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Update Password & Revoke Other Sessions';
+    }
+  }
+
+  async function startMfaSetup() {
+    try {
+      const res = await fetch('/api/v1/profile/mfa/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to initialize MFA.');
+
+      // Render QR Code
+      const qrContainer = document.getElementById('qrcode-container');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: data.otpauth_uri,
+        width: 170,
+        height: 170,
+        colorDark: '#0f172a',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      document.getElementById('mfa-secret-text').textContent = data.formatted_secret;
+      cachedRecoveryCodes = data.recovery_codes || [];
+
+      // Render Recovery Codes Grid
+      const grid = document.getElementById('recovery-codes-grid');
+      grid.innerHTML = cachedRecoveryCodes.map(c => `<div>${c}</div>`).join('');
+
+      document.getElementById('mfa-modal').classList.remove('hidden');
+      document.getElementById('mfa-confirm-code').value = '';
+      document.getElementById('mfa-confirm-error').classList.add('hidden');
+    } catch (err) {
+      showAlert(err.message, false);
+    }
+  }
+
+  function closeMfaModal() {
+    document.getElementById('mfa-modal').classList.add('hidden');
+  }
+
+  function copyMfaSecret() {
+    const txt = document.getElementById('mfa-secret-text').textContent.replace(/\s+/g, '');
+    navigator.clipboard.writeText(txt);
+    alert('Base32 Secret copied to clipboard!');
+  }
+
+  function copyRecoveryCodes() {
+    navigator.clipboard.writeText(cachedRecoveryCodes.join('\n'));
+    alert('All 8 emergency recovery codes copied to clipboard! Store them in a secure location.');
+  }
+
+  async function confirmMfaSetup() {
+    const code = document.getElementById('mfa-confirm-code').value.trim();
+    const errEl = document.getElementById('mfa-confirm-error');
+    const btn = document.getElementById('btn-confirm-mfa');
+
+    if (!code || code.length !== 6) {
+      errEl.textContent = 'Please enter a valid 6-digit code.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Verifying...';
+
+    try {
+      const res = await fetch('/api/v1/profile/mfa/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Verification failed.');
+
+      closeMfaModal();
+      showAlert('Two-Factor Authentication (TOTP) successfully activated!', true);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Activate 2FA';
+    }
+  }
+
+  function openDisableMfaModal() {
+    document.getElementById('disable-mfa-modal').classList.remove('hidden');
+  }
+
+  function closeDisableMfaModal() {
+    document.getElementById('disable-mfa-modal').classList.add('hidden');
+  }
+
+  async function handleDisableMfa(e) {
+    e.preventDefault();
+    const password = document.getElementById('disable-mfa-password').value;
+
+    try {
+      const res = await fetch('/api/v1/profile/mfa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to disable 2FA.');
+
+      closeDisableMfaModal();
+      showAlert('Two-Factor Authentication has been disabled.', true);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+</script>
+{% endblock %}

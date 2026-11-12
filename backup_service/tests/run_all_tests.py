@@ -31,6 +31,13 @@ from backup_service.tests.test_pentest_security import (
     test_directory_explorer_sensitive_file_blocking,
     test_database_config_injection_rejection
 )
+from backup_service.tests.test_iam_mfa import (
+    test_totp_cryptographic_engine,
+    test_emergency_recovery_codes,
+    test_token_version_revocation_reuse_protection,
+    test_mfa_challenge_token_lifecycle,
+    test_user_management_safeguards
+)
 
 TEST_SUITES = [
     ("Catalog: ACID State Store & Soft Deletions", test_catalog_lifecycle),
@@ -50,6 +57,11 @@ TEST_SUITES = [
     ("Pentest Defense: CWE-521 Enterprise Password Policy Enforcement", test_password_strength_validator),
     ("Pentest Defense: CWE-552 Credential & Vault File Redaction", test_directory_explorer_sensitive_file_blocking),
     ("Pentest Defense: CWE-78 Database Parameter Injection Prevention", test_database_config_injection_rejection),
+    ("IAM & 2FA: RFC 6238 TOTP Cryptographic Engine & Replay Mitigation", test_totp_cryptographic_engine),
+    ("IAM & 2FA: Emergency Backup Recovery Codes Lifecycle", test_emergency_recovery_codes),
+    ("IAM & Security: Token Versioning & Instant Revocation", test_token_version_revocation_reuse_protection),
+    ("IAM & Security: MFA Short-Lived Challenge Token Isolation", test_mfa_challenge_token_lifecycle),
+    ("IAM & RBAC: User Management & Admin Safeguards", test_user_management_safeguards),
 ]
 
 

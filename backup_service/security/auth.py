@@ -5,10 +5,12 @@ import hmac
 import json
 import base64
 import hashlib
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
 TOKEN_EXPIRATION_HOURS = 12
+MFA_CHALLENGE_TIMEOUT_MINUTES = 5
 HASH_ITERATIONS = 100_000
 
 
@@ -60,13 +62,22 @@ def verify_password(password: str, hashed_value: str) -> bool:
         return False
 
 
-def generate_auth_token(user_id: int, username: str, role: str, secret_key: bytes) -> str:
-    """Generate tamper-proof signed session token."""
+def generate_auth_token(
+    user_id: int,
+    username: str,
+    role: str,
+    secret_key: bytes,
+    token_version: int = 1,
+    timeout_hours: int = TOKEN_EXPIRATION_HOURS
+) -> str:
+    """Generate tamper-proof signed session token with token reuse and replay protection."""
     payload = {
         "uid": user_id,
         "sub": username,
         "role": role,
-        "exp": (datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRATION_HOURS)).timestamp(),
+        "ver": token_version,
+        "jti": secrets.token_hex(8),
+        "exp": (datetime.now(timezone.utc) + timedelta(hours=timeout_hours)).timestamp(),
         "iat": datetime.now(timezone.utc).timestamp(),
     }
     payload_json = json.dumps(payload, separators=(",", ":"))
@@ -76,6 +87,31 @@ def generate_auth_token(user_id: int, username: str, role: str, secret_key: byte
     sig_b64 = base64.urlsafe_b64encode(signature).decode("ascii")
 
     return f"{payload_b64}.{sig_b64}"
+
+
+def generate_mfa_challenge_token(user_id: int, secret_key: bytes) -> str:
+    """Generate short-lived (5 min) challenge token for second-step 2FA verification."""
+    payload = {
+        "type": "mfa_challenge",
+        "uid": user_id,
+        "jti": secrets.token_hex(8),
+        "exp": (datetime.now(timezone.utc) + timedelta(minutes=MFA_CHALLENGE_TIMEOUT_MINUTES)).timestamp(),
+        "iat": datetime.now(timezone.utc).timestamp(),
+    }
+    payload_json = json.dumps(payload, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("ascii")
+
+    signature = hmac.new(secret_key, payload_b64.encode("ascii"), hashlib.sha256).digest()
+    sig_b64 = base64.urlsafe_b64encode(signature).decode("ascii")
+    return f"{payload_b64}.{sig_b64}"
+
+
+def verify_mfa_challenge_token(token: str, secret_key: bytes) -> Optional[Dict[str, Any]]:
+    """Validate MFA challenge token signature, expiration, and claim type."""
+    payload = verify_auth_token(token, secret_key)
+    if not payload or payload.get("type") != "mfa_challenge":
+        return None
+    return payload
 
 
 def verify_auth_token(token: str, secret_key: bytes) -> Optional[Dict[str, Any]]:

@@ -185,6 +185,20 @@ class DatabaseManager:
             except Exception:
                 pass
 
+            # Safe auto-migration for MFA, token versioning, and security audits
+            for col_name, col_type in [
+                ("mfa_enabled", "INTEGER NOT NULL DEFAULT 0"),
+                ("totp_secret_encrypted", "TEXT DEFAULT NULL"),
+                ("last_totp_step", "INTEGER NOT NULL DEFAULT 0"),
+                ("recovery_codes_json", "TEXT DEFAULT NULL"),
+                ("token_version", "INTEGER NOT NULL DEFAULT 1"),
+                ("last_login_at", "TEXT DEFAULT NULL"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+                except Exception:
+                    pass
+
             # Seed default admin user if no users exist
             cur = conn.execute("SELECT COUNT(*) AS cnt FROM users")
             if cur.fetchone()["cnt"] == 0:
@@ -215,20 +229,146 @@ class DatabaseManager:
 
     def list_users(self) -> List[Dict[str, Any]]:
         with self.connection() as conn:
-            cur = conn.execute("SELECT id, username, email, role, is_active, created_at, updated_at FROM users ORDER BY id ASC")
+            cur = conn.execute(
+                """
+                SELECT id, username, email, role, is_active, mfa_enabled,
+                       token_version, last_login_at, created_at, updated_at
+                FROM users
+                ORDER BY id ASC
+                """
+            )
             return [dict(row) for row in cur.fetchall()]
 
-    def create_user(self, username: str, email: str, password_hash: str, role: str) -> int:
+    def create_user(self, username: str, email: Optional[str], password_hash: str, role: str) -> int:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with self.connection() as conn:
             cur = conn.execute(
                 """
-                INSERT INTO users (username, email, password_hash, role, is_active, must_change_password, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 1, 0, ?, ?)
+                INSERT INTO users (username, email, password_hash, role, is_active, must_change_password, token_version, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 1, 0, 1, ?, ?)
                 """,
-                (username, email, password_hash, role, now_iso, now_iso)
+                (username.strip().lower(), email.strip() if email else None, password_hash, role, now_iso, now_iso)
             )
             return cur.lastrowid
+
+    def update_user(self, user_id: int, email: Optional[str], role: str, is_active: int) -> None:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET email = ?, role = ?, is_active = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (email.strip() if email else None, role, is_active, now_iso, user_id)
+            )
+
+    def update_user_password(self, user_id: int, new_password_hash: str) -> None:
+        """Update password and increment token_version for instant session revocation."""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET password_hash = ?, token_version = token_version + 1, must_change_password = 0, updated_at = ?
+                WHERE id = ?
+                """,
+                (new_password_hash, now_iso, user_id)
+            )
+
+    def delete_user(self, user_id: int, requesting_user_id: int) -> tuple[bool, str]:
+        """Safely delete user enforcing self-deletion and last-admin safeguards."""
+        if user_id == requesting_user_id:
+            return False, "You cannot delete your own active administrator account."
+
+        with self.connection() as conn:
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not user:
+                return False, "Target user not found."
+
+            if user["role"] == Role.ADMIN:
+                admin_count = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM users WHERE role = ? AND is_active = 1",
+                    (Role.ADMIN,)
+                ).fetchone()["cnt"]
+                if admin_count <= 1:
+                    return False, "Cannot delete the sole remaining administrator account."
+
+            conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            return True, "User deleted successfully."
+
+    def set_user_mfa(
+        self,
+        user_id: int,
+        mfa_enabled: int,
+        totp_secret_encrypted: Optional[str] = None,
+        recovery_codes_json: Optional[str] = None
+    ) -> None:
+        """Update user MFA settings and rotate token version."""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET mfa_enabled = ?, totp_secret_encrypted = ?, recovery_codes_json = ?,
+                    token_version = token_version + 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (mfa_enabled, totp_secret_encrypted, recovery_codes_json, now_iso, user_id)
+            )
+
+    def disable_user_mfa(self, user_id: int) -> None:
+        """Disable MFA and clear secrets."""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET mfa_enabled = 0, totp_secret_encrypted = NULL, recovery_codes_json = NULL,
+                    last_totp_step = 0, token_version = token_version + 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (now_iso, user_id)
+            )
+
+    def update_last_totp_step(self, user_id: int, step: int) -> None:
+        """Record last used TOTP interval step to prevent code reuse and replay attacks."""
+        with self.connection() as conn:
+            conn.execute("UPDATE users SET last_totp_step = ? WHERE id = ?", (step, user_id))
+
+    def consume_recovery_code(self, user_id: int, code_hash_to_remove: str) -> bool:
+        """Remove a single-use recovery code hash once successfully used."""
+        import json
+        with self.connection() as conn:
+            row = conn.execute("SELECT recovery_codes_json FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not row or not row["recovery_codes_json"]:
+                return False
+            try:
+                hashes = json.loads(row["recovery_codes_json"])
+                if code_hash_to_remove in hashes:
+                    hashes.remove(code_hash_to_remove)
+                    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    conn.execute(
+                        "UPDATE users SET recovery_codes_json = ?, updated_at = ? WHERE id = ?",
+                        (json.dumps(hashes), now_iso, user_id)
+                    )
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def increment_token_version(self, user_id: int) -> int:
+        """Increment token_version to immediately revoke all active JWT tokens for user."""
+        with self.connection() as conn:
+            conn.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (user_id,))
+            row = conn.execute("SELECT token_version FROM users WHERE id = ?", (user_id,)).fetchone()
+            return row["token_version"] if row else 1
+
+    def record_user_login(self, user_id: int) -> None:
+        """Record successful login timestamp."""
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user_id))
 
     # --------------------------------------------------------------------------
     # Storage Configs API

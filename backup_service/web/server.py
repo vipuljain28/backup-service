@@ -27,7 +27,7 @@ from backup_service.storage.local_storage import LocalStorageProvider
 
 from backup_service.web.routes import (
     auth_routes, client_routes, storage_routes, explorer_routes,
-    backup_routes, restore_routes, system_routes
+    backup_routes, restore_routes, system_routes, user_routes
 )
 
 from urllib.parse import urlparse
@@ -178,6 +178,7 @@ def create_app() -> FastAPI:
     app.include_router(backup_routes.router)
     app.include_router(restore_routes.router)
     app.include_router(system_routes.router)
+    app.include_router(user_routes.router)
 
     return app
 

@@ -67,9 +67,9 @@ async def restores_page(request: Request, user: dict = Depends(require_auth)):
     storage_configs = db.list_storage_configs()
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        "restore.html",
-        {
-            "request": request,
+        request=request,
+        name="restore.html",
+        context={
             "user": user,
             "restore_jobs": restore_jobs,
             "backup_jobs": backup_jobs,

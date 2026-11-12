@@ -144,9 +144,9 @@ async def backups_page(request: Request, user: dict = Depends(require_auth)):
     clients = db.list_clients()
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        "backups.html",
-        {
-            "request": request,
+        request=request,
+        name="backups.html",
+        context={
             "user": user,
             "jobs": jobs,
             "clients": clients,

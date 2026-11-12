@@ -25,9 +25,9 @@ async def dashboard_page(request: Request, user: dict = Depends(require_auth)):
 
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
+        request=request,
+        name="dashboard.html",
+        context={
             "user": user,
             "clients": clients,
             "recent_jobs": recent_jobs,
@@ -55,9 +55,9 @@ async def system_page(request: Request, user: dict = Depends(require_auth)):
 
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        "system.html",
-        {
-            "request": request,
+        request=request,
+        name="system.html",
+        context={
             "user": user,
             "version_info": version_info,
             "audit_logs": audit_logs,

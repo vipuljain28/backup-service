@@ -54,7 +54,7 @@ async def login_page(request: Request):
     if user:
         return RedirectResponse(url="/", status_code=303)
     templates = request.app.state.templates
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
 
 
 @router.post("/login")
@@ -76,7 +76,7 @@ async def login_post(
             details={"reason": "Invalid credentials"}
         )
         templates = request.app.state.templates
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid username or password"})
+        return templates.TemplateResponse(request=request, name="login.html", context={"error": "Invalid username or password"})
 
     token = generate_auth_token(
         user["id"], user["username"], user["role"], request.app.state.master_secret

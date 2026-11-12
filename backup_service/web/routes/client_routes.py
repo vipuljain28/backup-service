@@ -18,9 +18,9 @@ async def clients_page(request: Request, user: dict = Depends(require_auth)):
     storage_configs = db.list_storage_configs()
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        "clients.html",
-        {
-            "request": request,
+        request=request,
+        name="clients.html",
+        context={
             "user": user,
             "clients": clients,
             "storage_configs": storage_configs,

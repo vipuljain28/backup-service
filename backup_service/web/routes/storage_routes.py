@@ -18,9 +18,9 @@ async def storage_page(request: Request, user: dict = Depends(require_auth)):
     storage_configs = db.list_storage_configs()
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        "storage.html",
-        {
-            "request": request,
+        request=request,
+        name="storage.html",
+        context={
             "user": user,
             "storage_configs": storage_configs,
             "active_tab": "storage"

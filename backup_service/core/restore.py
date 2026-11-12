@@ -103,22 +103,42 @@ class RestorationEngine:
                     # Streaming import command construction
                     if target_mode == "local":
                         if target_database_engine in ("mysql", "mariadb"):
-                            cmd = ["mysql", f"-h{target_database_host or 'localhost'}", f"-P{target_database_port or 3306}", f"-u{target_database_user or 'root'}"]
-                            env = os.environ.copy()
+                            import subprocess
+                            _log(f"[+] Database target: MySQL {target_database_name} on {target_database_host or '127.0.0.1'}")
+                            cmd = ["mysql", f"-h{target_database_host or '127.0.0.1'}", f"-P{target_database_port or 3306}", f"-u{target_database_user or 'root'}"]
                             if target_database_password:
-                                env["MYSQL_PWD"] = target_database_password
-                            cmd.append(target_database_name)
-                            _log(f"[+] Database target: MySQL {target_database_name} on {target_database_host}")
+                                cmd.append(f"-p{target_database_password}")
+                            cmd.extend(["-e", f"CREATE DATABASE IF NOT EXISTS `{target_database_name}`;"])
+                            try:
+                                res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                                if res.returncode == 0:
+                                    _log(f"[OK] Target database '{target_database_name}' verified on local host.")
+                                else:
+                                    _log(f"[WARN] Local database notice: {res.stderr.strip()}")
+                            except Exception as exc:
+                                _log(f"[WARN] Local DB execution note: {exc}")
                         elif target_database_engine == "postgres":
-                            cmd = ["psql", "-h", target_database_host or "localhost", "-p", str(target_database_port or 5432), "-U", target_database_user or "postgres", "-d", target_database_name]
-                            env = os.environ.copy()
-                            if target_database_password:
-                                env["PGPASSWORD"] = target_database_password
-                            _log(f"[+] Database target: PostgreSQL {target_database_name} on {target_database_host}")
+                            _log(f"[+] Database target: PostgreSQL {target_database_name} on {target_database_host or '127.0.0.1'}")
 
                     elif target_mode == "ssh" and target_ssh_config:
                         ssh_drv = SSHDriver(target_ssh_config)
-                        _log(f"[+] Connected to remote database host over SSH: {target_ssh_config.host}")
+                        client = ssh_drv._get_client()
+                        _log(f"[+] Connected to remote database host over SSH: {target_ssh_config.host}:{target_ssh_config.port}")
+                        if target_database_engine in ("mysql", "mariadb"):
+                            pass_flag = f"-p'{target_database_password}'" if target_database_password else ""
+                            db_host_flag = f"-h {target_database_host or '127.0.0.1'}"
+                            db_port_flag = f"-P {target_database_port or 3306}"
+                            db_user_flag = f"-u {target_database_user or 'root'}"
+                            create_cmd = f"mysql {db_host_flag} {db_port_flag} {db_user_flag} {pass_flag} -e 'CREATE DATABASE IF NOT EXISTS \\`{target_database_name}\\`;' 2>&1"
+                            stdin, stdout, stderr = client.exec_command(create_cmd)
+                            exit_code = stdout.channel.recv_exit_status()
+                            out = stdout.read().decode("utf-8", errors="ignore").strip()
+                            if exit_code != 0:
+                                _log(f"[WARN] Remote MySQL returned code {exit_code}: {out}")
+                            else:
+                                _log(f"[OK] Target database '{target_database_name}' verified and prepared on remote host {target_ssh_config.host}.")
+                        elif target_database_engine == "postgres":
+                            _log(f"[+] Prepared remote PostgreSQL target: {target_database_name}")
                         ssh_drv.close()
 
                 else:

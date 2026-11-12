@@ -10,16 +10,17 @@
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
     <!-- Panel 1: Point-in-Time Restore Wizard -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
       <div class="border-b border-gray-100 pb-3">
         <h3 class="font-bold text-gray-900 text-base">Point-in-Time Disaster Recovery</h3>
-        <p class="text-xs text-gray-500 mt-1">Restore databases and file hierarchies to original servers or new disaster recovery hosts.</p>
+        <p class="text-xs text-gray-500 mt-1">Restore databases and file hierarchies to original servers, registered targets, or brand new disaster recovery hosts.</p>
       </div>
 
-      <form method="POST" action="/restores/trigger" class="space-y-4 text-sm">
+      <form method="POST" action="/restores/trigger" id="form-restore" onsubmit="prepareRestorePayload()" class="space-y-4 text-sm">
+        <!-- Snapshot Selection -->
         <div>
           <label class="block font-medium text-gray-700">Select Backup Snapshot</label>
-          <select name="backup_job_id" required class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
+          <select name="backup_job_id" id="sel-backup-job" required class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
             <option value="" disabled selected>-- Choose historical snapshot --</option>
             {% for b in backup_jobs %}
               {% if b.is_dry_run %}
@@ -39,28 +40,223 @@
           </select>
         </div>
 
+        <!-- Destination Type Selector -->
         <div>
           <label class="block font-medium text-gray-700">Restoration Destination</label>
-          <select name="target_location_type" id="restore-dest-select" onchange="toggleRestoreDest(this.value)" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
-            <option value="original">Original Location (Source Servers & DBs)</option>
-            <option value="new">New Location (Disaster Recovery Host / Directory)</option>
+          <select name="target_location_type" id="restore-dest-select" onchange="toggleRestoreDest(this.value)" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold text-gray-800 bg-gray-50">
+            <option value="original">Original Location (Source Server & DB Target)</option>
+            <option value="existing_server">Registered Server Connection (Select from Catalog)</option>
+            <option value="new">➕ Add New Server & DB Credentials (Disaster Recovery Host)</option>
           </select>
         </div>
 
-        <div id="new-location-fields" class="space-y-3 p-3 bg-gray-50 border rounded-md hidden">
-          <div>
-            <label class="block font-medium text-gray-700 text-xs">New Target File Directory</label>
-            <input type="text" name="target_path" placeholder="/opt/dr_restored_data" class="mt-1 block w-full border rounded-md px-3 py-1.5 text-xs">
+        <!-- Section 1: Original Destination Notice -->
+        <div id="dest-original-info" class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-start space-x-2">
+          <span class="text-blue-600 font-bold mt-0.5">ℹ</span>
+          <span>Files and databases will be restored directly back to the original source server and database configuration where this client backup originated.</span>
+        </div>
+
+        <!-- Section 2: Existing Server Selection -->
+        <div id="dest-existing-server-fields" class="space-y-3 p-4 bg-gray-50 border border-gray-200 rounded-lg hidden">
+          <div class="font-bold text-gray-800 text-xs uppercase tracking-wider pb-1 border-b border-gray-200">
+            Registered Destination Server
           </div>
           <div>
-            <label class="block font-medium text-gray-700 text-xs">New Target Database Name</label>
-            <input type="text" name="target_db_name" placeholder="star_dr_recovered" class="mt-1 block w-full border rounded-md px-3 py-1.5 text-xs">
+            <label class="block font-medium text-gray-700 text-xs">Choose Target Server</label>
+            <select name="target_server_id" id="sel-existing-server" class="mt-1 block w-full border rounded-md px-3 py-1.5 text-xs font-semibold">
+              <option value="" disabled selected>-- Select Registered Server --</option>
+              {% for s in all_servers %}
+              <option value="{{ s.id }}" data-host="{{ s.host }}" data-port="{{ s.port }}" data-user="{{ s.username }}" data-mode="{{ s.mode }}">
+                {{ s.name }} ({{ s.host }}:{{ s.port }} - {{ s.username }} [{{ s.client_name }}])
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700 text-xs">Target File Directory on Server</label>
+            <input type="text" id="existing_target_path" placeholder="/var/www/dr_recovery" class="mt-1 block w-full border rounded-md px-3 py-1.5 text-xs">
+          </div>
+          
+          <div class="pt-2 border-t border-gray-200">
+            <div class="font-bold text-gray-800 text-xs uppercase tracking-wider mb-2">Target Database on Selected Server</div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-medium text-gray-600">DB Engine</label>
+                <select id="existing_db_engine" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+                  <option value="mysql">MySQL / MariaDB</option>
+                  <option value="postgres">PostgreSQL</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-600">Target Database Name</label>
+                <input type="text" id="existing_db_name" placeholder="star_dr_recovered" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-600">DB Host (Local to Server)</label>
+                <input type="text" id="existing_db_host" value="127.0.0.1" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-600">DB Port</label>
+                <input type="number" id="existing_db_port" value="3306" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-600">DB User</label>
+                <input type="text" id="existing_db_user" value="root" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-600">DB Password</label>
+                <input type="password" id="existing_db_pass" placeholder="Password (if any)" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2 flex justify-end">
+            <button type="button" onclick="testExistingServerCredentials()" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-semibold rounded">
+              ⚡ Test DB Connection on Selected Server
+            </button>
           </div>
         </div>
 
+        <!-- Section 3: Add Brand New Server & Database Credentials -->
+        <div id="dest-new-credentials-fields" class="space-y-4 p-4 bg-amber-50/50 border border-amber-200 rounded-lg hidden">
+          <div class="border-b border-amber-200 pb-2">
+            <div class="font-bold text-gray-900 text-xs uppercase tracking-wider flex items-center justify-between">
+              <span>Disaster Recovery Host Server</span>
+              <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">New Target</span>
+            </div>
+            <p class="text-[11px] text-gray-600 mt-0.5">Specify destination machine credentials where data should be restored.</p>
+          </div>
+
+          <!-- New Server Mode -->
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-700">Target Server Mode</label>
+              <select name="new_server_mode" id="new_server_mode" onchange="toggleNewServerMode(this.value)" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs font-semibold">
+                <option value="ssh">Remote Linux Server (SSH / SFTP)</option>
+                <option value="local">Local Backup Host (Local Filesystem)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700">Server Identifier Name</label>
+              <input type="text" name="new_server_name" id="new_server_name" placeholder="DR Host Frankfurt" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs">
+            </div>
+          </div>
+
+          <!-- SSH Server Credentials -->
+          <div id="new-ssh-fields" class="space-y-2">
+            <div class="grid grid-cols-3 gap-2">
+              <div class="col-span-2">
+                <label class="block text-[11px] font-medium text-gray-700">Server Host / IP Address</label>
+                <input type="text" name="new_server_host" id="new_server_host" placeholder="94.103.163.225 or dr.example.com" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">SSH Port</label>
+                <input type="number" name="new_server_port" id="new_server_port" value="22" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs font-mono">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">SSH Username</label>
+                <input type="text" name="new_server_user" id="new_server_user" placeholder="root or admin" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">SSH Authentication</label>
+                <select name="new_server_auth_type" id="new_server_auth_type" onchange="toggleNewAuthSecret(this.value)" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs">
+                  <option value="password">Password Authentication</option>
+                  <option value="key">SSH Private Key (PEM)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="new-auth-password-box">
+              <label class="block text-[11px] font-medium text-gray-700">SSH User Password</label>
+              <input type="password" id="new_server_secret_pass" placeholder="Enter root/user SSH password" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs">
+            </div>
+
+            <div id="new-auth-key-box" class="hidden">
+              <label class="block text-[11px] font-medium text-gray-700">SSH Private Key Content or File Path</label>
+              <textarea id="new_server_secret_key" rows="2" placeholder="-----BEGIN OPENSSH PRIVATE KEY----- or /path/to/key.pem" class="mt-1 block w-full border rounded px-2 py-1 text-xs font-mono"></textarea>
+            </div>
+            <input type="hidden" name="new_server_secret" id="new_server_secret">
+
+            <div class="flex items-center justify-between pt-1">
+              <label class="flex items-center space-x-2 text-xs text-gray-700">
+                <input type="checkbox" name="save_new_server" value="true" checked class="rounded text-blue-600">
+                <span>Save this server connection in catalog for future use</span>
+              </label>
+              <button type="button" onclick="testNewServerConnection()" class="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-semibold rounded">
+                ⚡ Test Server SSH
+              </button>
+            </div>
+          </div>
+
+          <!-- Target File Directory -->
+          <div>
+            <label class="block text-xs font-medium text-gray-700">Target File Directory on Destination</label>
+            <input type="text" id="new_target_path" placeholder="/var/www/recovered_site" class="mt-1 block w-full border rounded px-2 py-1.5 text-xs">
+          </div>
+
+          <!-- New Database Target Credentials -->
+          <div class="pt-3 border-t border-amber-200 space-y-2">
+            <div class="font-bold text-gray-900 text-xs uppercase tracking-wider">
+              Disaster Recovery Database Credentials
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">Database Engine</label>
+                <select id="new_db_engine" class="mt-1 block w-full border rounded px-2 py-1 text-xs font-semibold">
+                  <option value="mysql">MySQL / MariaDB</option>
+                  <option value="postgres">PostgreSQL</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">New Target Database Name</label>
+                <input type="text" id="new_db_name" placeholder="star_dr_recovered" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">Database Host</label>
+                <input type="text" id="new_db_host" value="127.0.0.1" class="mt-1 block w-full border rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">Database Port</label>
+                <input type="number" id="new_db_port" value="3306" class="mt-1 block w-full border rounded px-2 py-1 text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">Database User</label>
+                <input type="text" id="new_db_user" value="root" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-gray-700">Database Password</label>
+                <input type="password" id="new_db_pass" placeholder="Password (if any)" class="mt-1 block w-full border rounded px-2 py-1 text-xs">
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <label class="flex items-center space-x-2 text-xs text-gray-700">
+                <input type="checkbox" name="save_new_db" value="true" class="rounded text-blue-600">
+                <span>Save this database target in client catalog</span>
+              </label>
+              <button type="button" onclick="testNewDatabaseConnection()" class="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-semibold rounded">
+                ⚡ Test DB Connection
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden Unified Form Inputs -->
+        <input type="hidden" name="target_path" id="final_target_path">
+        <input type="hidden" name="target_db_name" id="final_target_db_name">
+        <input type="hidden" name="target_db_engine" id="final_target_db_engine" value="mysql">
+        <input type="hidden" name="target_db_host" id="final_target_db_host" value="127.0.0.1">
+        <input type="hidden" name="target_db_port" id="final_target_db_port" value="3306">
+        <input type="hidden" name="target_db_user" id="final_target_db_user" value="root">
+        <input type="hidden" name="target_db_pass" id="final_target_db_pass" value="">
+
+        <!-- Restoration Scope -->
         <div>
           <label class="block font-medium text-gray-700">Restoration Scope</label>
-          <select name="restore_scope" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          <select name="restore_scope" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
             <option value="all">Full Recovery (Databases + Files)</option>
             <option value="files_only">Files Only</option>
             <option value="db_only">Database Only</option>
@@ -115,8 +311,9 @@
 
   <!-- Historical Restores Table -->
   <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-    <div class="p-5 border-b border-gray-200">
+    <div class="p-5 border-b border-gray-200 flex justify-between items-center">
       <h3 class="font-bold text-gray-800">Restoration Operations Log</h3>
+      <span class="text-xs text-gray-500 font-mono">{{ restore_jobs|length }} recorded operations</span>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
@@ -125,6 +322,8 @@
             <th class="px-6 py-3">Job ID</th>
             <th class="px-6 py-3">Client</th>
             <th class="px-6 py-3">Initiated Time</th>
+            <th class="px-6 py-3">Target Host</th>
+            <th class="px-6 py-3">Target DB</th>
             <th class="px-6 py-3">Scope</th>
             <th class="px-6 py-3">Status</th>
             <th class="px-6 py-3 text-right">Execution Logs</th>
@@ -136,6 +335,21 @@
             <td class="px-6 py-4 font-mono font-bold text-xs text-gray-900">#{{ r.id }}</td>
             <td class="px-6 py-4 font-semibold">{{ r.client_name }}</td>
             <td class="px-6 py-4 font-mono text-xs">{{ r.created_at }}</td>
+            <td class="px-6 py-4 text-xs font-mono">
+              {% if r.target_server_name %}
+              <div class="font-semibold text-gray-800">{{ r.target_server_name }}</div>
+              <div class="text-[10px] text-gray-400">{{ r.target_server_host or '' }}</div>
+              {% else %}
+              <span class="text-gray-500">Source Host</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-xs font-mono">
+              {% if r.target_db_name %}
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">{{ r.target_db_name }}</span>
+              {% else %}
+              <span class="text-gray-400">N/A</span>
+              {% endif %}
+            </td>
             <td class="px-6 py-4 text-xs font-semibold uppercase">{{ r.restore_scope }}</td>
             <td class="px-6 py-4">
               {% if r.status == 'success' %}
@@ -147,14 +361,14 @@
               {% endif %}
             </td>
             <td class="px-6 py-4 text-right">
-              <button onclick="alert('Logs:\n' + {{ r.execution_logs|tojson }})" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded border">
+              <button onclick="viewRestoreLog({{ r.id }}, {{ r.execution_logs|tojson }})" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded border">
                 View Log Output
               </button>
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="6" class="px-6 py-8 text-center text-gray-400">No restoration jobs executed yet.</td>
+            <td colspan="8" class="px-6 py-8 text-center text-gray-400">No restoration jobs executed yet.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -163,14 +377,190 @@
   </div>
 
 </div>
+
+<!-- Modal for Viewing Restore Logs -->
+<div id="modal-restore-logs" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-4">
+    <div class="flex justify-between items-center pb-2 border-b">
+      <h3 class="text-base font-bold text-gray-900" id="restore-log-modal-title">Restoration Execution Log</h3>
+      <button onclick="document.getElementById('modal-restore-logs').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+    </div>
+    <pre id="restore-log-content" class="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-xs overflow-auto max-h-96 whitespace-pre-wrap"></pre>
+    <div class="flex justify-end">
+      <button onclick="document.getElementById('modal-restore-logs').classList.add('hidden')" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-semibold rounded">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 function toggleRestoreDest(val) {
-  const fields = document.getElementById('new-location-fields');
-  if (val === 'new') fields.classList.remove('hidden');
-  else fields.classList.add('hidden');
+  const origInfo = document.getElementById('dest-original-info');
+  const existingFields = document.getElementById('dest-existing-server-fields');
+  const newFields = document.getElementById('dest-new-credentials-fields');
+
+  origInfo.classList.add('hidden');
+  existingFields.classList.add('hidden');
+  newFields.classList.add('hidden');
+
+  if (val === 'original') {
+    origInfo.classList.remove('hidden');
+  } else if (val === 'existing_server') {
+    existingFields.classList.remove('hidden');
+  } else if (val === 'new') {
+    newFields.classList.remove('hidden');
+  }
+}
+
+function toggleNewServerMode(mode) {
+  const sshFields = document.getElementById('new-ssh-fields');
+  if (mode === 'ssh') {
+    sshFields.classList.remove('hidden');
+  } else {
+    sshFields.classList.add('hidden');
+  }
+}
+
+function toggleNewAuthSecret(authType) {
+  const passBox = document.getElementById('new-auth-password-box');
+  const keyBox = document.getElementById('new-auth-key-box');
+  if (authType === 'password') {
+    passBox.classList.remove('hidden');
+    keyBox.classList.add('hidden');
+  } else {
+    passBox.classList.add('hidden');
+    keyBox.classList.remove('hidden');
+  }
+}
+
+function prepareRestorePayload() {
+  const destType = document.getElementById('restore-dest-select').value;
+  const authType = document.getElementById('new_server_auth_type').value;
+
+  // Sync SSH secret for new server
+  if (authType === 'password') {
+    document.getElementById('new_server_secret').value = document.getElementById('new_server_secret_pass').value;
+  } else {
+    document.getElementById('new_server_secret').value = document.getElementById('new_server_secret_key').value;
+  }
+
+  // Populate unified hidden fields based on selected destination mode
+  if (destType === 'original') {
+    document.getElementById('final_target_path').value = '';
+    document.getElementById('final_target_db_name').value = '';
+  } else if (destType === 'existing_server') {
+    document.getElementById('final_target_path').value = document.getElementById('existing_target_path').value;
+    document.getElementById('final_target_db_engine').value = document.getElementById('existing_db_engine').value;
+    document.getElementById('final_target_db_name').value = document.getElementById('existing_db_name').value;
+    document.getElementById('final_target_db_host').value = document.getElementById('existing_db_host').value;
+    document.getElementById('final_target_db_port').value = document.getElementById('existing_db_port').value;
+    document.getElementById('final_target_db_user').value = document.getElementById('existing_db_user').value;
+    document.getElementById('final_target_db_pass').value = document.getElementById('existing_db_pass').value;
+  } else if (destType === 'new') {
+    document.getElementById('final_target_path').value = document.getElementById('new_target_path').value;
+    document.getElementById('final_target_db_engine').value = document.getElementById('new_db_engine').value;
+    document.getElementById('final_target_db_name').value = document.getElementById('new_db_name').value;
+    document.getElementById('final_target_db_host').value = document.getElementById('new_db_host').value;
+    document.getElementById('final_target_db_port').value = document.getElementById('new_db_port').value;
+    document.getElementById('final_target_db_user').value = document.getElementById('new_db_user').value;
+    document.getElementById('final_target_db_pass').value = document.getElementById('new_db_pass').value;
+  }
+}
+
+async function testExistingServerCredentials() {
+  const serverId = document.getElementById('sel-existing-server').value;
+  if (!serverId) {
+    alert("Please select a registered target server first.");
+    return;
+  }
+  const formData = new FormData();
+  formData.append('server_id', serverId);
+  formData.append('engine', document.getElementById('existing_db_engine').value);
+  formData.append('host', document.getElementById('existing_db_host').value);
+  formData.append('port', document.getElementById('existing_db_port').value);
+  formData.append('username', document.getElementById('existing_db_user').value);
+  formData.append('password', document.getElementById('existing_db_pass').value);
+  formData.append('db_name', document.getElementById('existing_db_name').value);
+
+  try {
+    const res = await fetch('/api/v1/restores/test-db', { method: 'POST', body: formData });
+    const data = await res.json();
+    alert((data.success ? "✅ " : "❌ ") + data.message);
+  } catch (e) {
+    alert("❌ Error communicating with verification API: " + e.message);
+  }
+}
+
+async function testNewServerConnection() {
+  const host = document.getElementById('new_server_host').value.trim();
+  const port = document.getElementById('new_server_port').value;
+  const username = document.getElementById('new_server_user').value.trim();
+  const authType = document.getElementById('new_server_auth_type').value;
+  const secret = authType === 'password'
+    ? document.getElementById('new_server_secret_pass').value
+    : document.getElementById('new_server_secret_key').value;
+
+  if (!host || !username) {
+    alert("Please specify both Server Host/IP and SSH Username.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('mode', 'ssh');
+  formData.append('host', host);
+  formData.append('port', port);
+  formData.append('username', username);
+  formData.append('auth_type', authType);
+  formData.append('secret', secret);
+
+  try {
+    const res = await fetch('/api/v1/restores/test-server', { method: 'POST', body: formData });
+    const data = await res.json();
+    alert((data.success ? "✅ " : "❌ ") + data.message);
+  } catch (e) {
+    alert("❌ Error testing SSH connection: " + e.message);
+  }
+}
+
+async function testNewDatabaseConnection() {
+  const host = document.getElementById('new_server_host').value.trim();
+  const port = document.getElementById('new_server_port').value;
+  const username = document.getElementById('new_server_user').value.trim();
+  const authType = document.getElementById('new_server_auth_type').value;
+  const secret = authType === 'password'
+    ? document.getElementById('new_server_secret_pass').value
+    : document.getElementById('new_server_secret_key').value;
+
+  const formData = new FormData();
+  formData.append('ssh_host', host);
+  formData.append('ssh_port', port);
+  formData.append('ssh_user', username);
+  formData.append('ssh_auth_type', authType);
+  formData.append('ssh_secret', secret);
+
+  formData.append('engine', document.getElementById('new_db_engine').value);
+  formData.append('host', document.getElementById('new_db_host').value);
+  formData.append('port', document.getElementById('new_db_port').value);
+  formData.append('username', document.getElementById('new_db_user').value);
+  formData.append('password', document.getElementById('new_db_pass').value);
+  formData.append('db_name', document.getElementById('new_db_name').value);
+
+  try {
+    const res = await fetch('/api/v1/restores/test-db', { method: 'POST', body: formData });
+    const data = await res.json();
+    alert((data.success ? "✅ " : "❌ ") + data.message);
+  } catch (e) {
+    alert("❌ Error testing database connection: " + e.message);
+  }
+}
+
+function viewRestoreLog(jobId, logs) {
+  document.getElementById('restore-log-modal-title').innerText = `Restoration Execution Log - Job #${jobId}`;
+  document.getElementById('restore-log-content').innerText = logs || "No execution logs recorded.";
+  document.getElementById('modal-restore-logs').classList.remove('hidden');
 }
 </script>
 {% endblock %}

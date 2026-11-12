@@ -511,13 +511,33 @@ class DatabaseManager:
                 (status, logs, now_iso, job_id)
             )
 
+    def list_all_servers(self) -> List[Dict[str, Any]]:
+        with self.connection() as conn:
+            cur = conn.execute(
+                """
+                SELECT s.*, c.display_name AS client_name, c.client_id AS client_slug
+                FROM server_connections s
+                LEFT JOIN clients c ON s.client_id = c.id
+                ORDER BY s.id DESC
+                """
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_server(self, server_id: int) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            cur = conn.execute("SELECT * FROM server_connections WHERE id = ?", (server_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def list_restore_jobs(self, limit: int = 30) -> List[Dict[str, Any]]:
         with self.connection() as conn:
             cur = conn.execute(
                 """
-                SELECT r.*, c.display_name AS client_name
+                SELECT r.*, c.display_name AS client_name,
+                       s.name AS target_server_name, s.host AS target_server_host, s.mode AS target_server_mode
                 FROM restore_jobs r
                 JOIN clients c ON r.client_id = c.id
+                LEFT JOIN server_connections s ON r.target_server_id = s.id
                 ORDER BY r.id DESC LIMIT ?
                 """,
                 (limit,)

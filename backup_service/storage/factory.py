@@ -34,7 +34,9 @@ class StorageProviderFactory:
                 tenant_id=credentials.get("tenant_id", ""),
                 client_id=credentials.get("client_id", ""),
                 client_secret=credentials.get("client_secret", ""),
-                root_folder_name=credentials.get("root_folder_name", "Enterprise_Backups"),
+                root_folder_name=credentials.get("root_folder_name", "STAR_Enterprise_Backups"),
+                user_email=credentials.get("user_email"),
+                drive_id=credentials.get("drive_id")
             )
 
         elif p_type in ("s3", "terabox", "s3_terabox"):

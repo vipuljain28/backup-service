@@ -243,6 +243,34 @@
             <span class="text-xs text-gray-500 mt-1 block">Value copied from Azure &gt; Certificates &amp; Secrets.</span>
           </div>
         </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Target User Email (Optional for M365)</span>
+                <button type="button" onclick="openStorageGuideModal('onedrive')" class="text-indigo-600 hover:text-indigo-800" title="Target user mailbox for application tokens">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="email" name="onedrive_user_email" placeholder="e.g. admin@company.onmicrosoft.com" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500">
+            <span class="text-xs text-gray-500 mt-1 block">Specifies which M365 user's OneDrive receives the backups. Leave empty for auto-detection.</span>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Root Backup Folder Name</span>
+                <button type="button" onclick="openStorageGuideModal('onedrive')" class="text-indigo-600 hover:text-indigo-800">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="text" name="onedrive_root_folder" value="STAR_Enterprise_Backups" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500">
+            <span class="text-xs text-gray-500 mt-1 block">Top-level folder in OneDrive where all client archives are stored.</span>
+          </div>
+        </div>
       </div>
 
       <!-- =================================================================== -->
@@ -359,7 +387,10 @@
         <label for="is_default" class="text-sm text-gray-700 font-medium">Set as default storage gateway for new clients</label>
       </div>
 
-      <div class="flex justify-end pt-4 border-t">
+      <div class="flex justify-end space-x-3 pt-4 border-t">
+        <button type="button" onclick="testCurrentFormStorage(this)" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg text-sm transition">
+          Test Credentials First
+        </button>
         <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition">
           Save Storage Gateway
         </button>
@@ -817,6 +848,63 @@ async function testConfiguredStorage(id, type, btn) {
     alert(`❌ Network or Server Error: ${err.message}`);
   } finally {
     btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
+// Test current form inputs before saving
+async function testCurrentFormStorage(btn) {
+  const provider = document.getElementById('provider-select').value;
+  let credentials = {};
+
+  if (provider === 'gdrive') {
+    credentials = {
+      auth_mode: document.getElementById('gdrive_auth_mode') ? document.getElementById('gdrive_auth_mode').value : 'service_account',
+      service_account_file: document.getElementById('gdrive_sa_file') ? document.getElementById('gdrive_sa_file').value : '',
+      oauth_client_file: document.getElementById('gdrive_oauth_file') ? document.getElementById('gdrive_oauth_file').value : '',
+      oauth_token_file: document.getElementById('gdrive_token_file') ? document.getElementById('gdrive_token_file').value : '',
+      root_folder_name: document.getElementById('gdrive_root_folder') ? document.getElementById('gdrive_root_folder').value : 'STAR_Enterprise_Backups'
+    };
+  } else if (provider === 'onedrive') {
+    credentials = {
+      tenant_id: document.querySelector('input[name="onedrive_tenant_id"]').value,
+      client_id: document.querySelector('input[name="onedrive_client_id"]').value,
+      client_secret: document.querySelector('input[name="onedrive_client_secret"]').value,
+      user_email: document.querySelector('input[name="onedrive_user_email"]').value,
+      root_folder_name: document.querySelector('input[name="onedrive_root_folder"]').value || 'STAR_Enterprise_Backups'
+    };
+  } else if (provider === 's3_terabox') {
+    credentials = {
+      endpoint_url: document.querySelector('input[name="s3_endpoint_url"]').value,
+      bucket_name: document.querySelector('input[name="s3_bucket_name"]').value,
+      access_key: document.querySelector('input[name="s3_access_key"]').value,
+      secret_key: document.querySelector('input[name="s3_secret_key"]').value
+    };
+  } else if (provider === 'local') {
+    credentials = {
+      root_dir: document.querySelector('input[name="local_root_dir"]').value
+    };
+  }
+
+  const origText = btn.innerHTML;
+  btn.innerHTML = '<span class="animate-pulse">Testing...</span>';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/v1/storage/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider_type: provider, credentials: credentials })
+    });
+    const data = await res.json();
+    if (res.ok && data.connected) {
+      alert(`✅ Storage Connection Verified Successfully:\n${data.message}`);
+    } else {
+      alert(`❌ Storage Connection Test Result:\n${data.message || 'Verification failed. Review credentials.'}`);
+    }
+  } catch (err) {
+    alert(`❌ Request Error: ${err.message}`);
+  } finally {
+    btn.innerHTML = origText;
     btn.disabled = false;
   }
 }

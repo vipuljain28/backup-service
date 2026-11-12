@@ -45,6 +45,8 @@ async def create_storage(
     onedrive_tenant_id: Optional[str] = Form(None),
     onedrive_client_id: Optional[str] = Form(None),
     onedrive_client_secret: Optional[str] = Form(None),
+    onedrive_user_email: Optional[str] = Form(None),
+    onedrive_root_folder: Optional[str] = Form("STAR_Enterprise_Backups"),
     # S3 / TeraBox fields
     s3_endpoint_url: Optional[str] = Form(None),
     s3_access_key: Optional[str] = Form(None),
@@ -69,10 +71,11 @@ async def create_storage(
         }
     elif p_type == "onedrive":
         credentials = {
-            "tenant_id": onedrive_tenant_id,
-            "client_id": onedrive_client_id,
-            "client_secret": onedrive_client_secret,
-            "root_folder_name": "Enterprise_Backups"
+            "tenant_id": (onedrive_tenant_id or "").strip(),
+            "client_id": (onedrive_client_id or "").strip(),
+            "client_secret": (onedrive_client_secret or "").strip(),
+            "user_email": (onedrive_user_email or "").strip(),
+            "root_folder_name": (onedrive_root_folder or "STAR_Enterprise_Backups").strip()
         }
     elif p_type in ("s3", "terabox", "s3_terabox"):
         credentials = {
@@ -117,11 +120,20 @@ async def test_storage_api(request: Request, body: dict, user: dict = Depends(re
 
     try:
         provider = StorageProviderFactory.create_provider(provider_type, credentials)
-        connected = provider.verify_connection()
+        if hasattr(provider, "verify_connection_detailed"):
+            res = provider.verify_connection_detailed()
+            connected = res.get("connected", False)
+            message = res.get("message", "")
+            if not connected and res.get("suggestion"):
+                message += f"\nRecommendation: {res['suggestion']}"
+        else:
+            connected = provider.verify_connection()
+            message = "Storage connection successful and verified." if connected else "Storage connection test failed."
+
         return {
             "provider_type": provider_type,
             "connected": connected,
-            "message": "Storage connection successful and verified." if connected else "Storage connection test failed."
+            "message": message
         }
     except Exception as exc:
         return {
@@ -145,12 +157,21 @@ async def test_configured_storage_api(request: Request, config_id: int, user: di
         creds_json = vault.decrypt(cfg["encrypted_credentials"])
         credentials = json.loads(creds_json)
         provider = StorageProviderFactory.create_provider(p_type, credentials)
-        connected = provider.verify_connection()
+        if hasattr(provider, "verify_connection_detailed"):
+            res = provider.verify_connection_detailed()
+            connected = res.get("connected", False)
+            message = res.get("message", "")
+            if not connected and res.get("suggestion"):
+                message += f"\nRecommendation: {res['suggestion']}"
+        else:
+            connected = provider.verify_connection()
+            message = f"Storage '{cfg['name']}' ({p_type.upper()}) verified successfully!" if connected else f"Storage '{cfg['name']}' connection check failed."
+
         return {
             "config_id": config_id,
             "provider_type": p_type,
             "connected": connected,
-            "message": f"Storage '{cfg['name']}' ({p_type.upper()}) verified successfully!" if connected else f"Storage '{cfg['name']}' connection check failed."
+            "message": message
         }
     except Exception as exc:
         return {

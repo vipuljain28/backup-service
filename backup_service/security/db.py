@@ -133,6 +133,8 @@ class DatabaseManager:
                     manifest_json TEXT,
                     error_message TEXT,
                     is_dry_run INTEGER DEFAULT 0,
+                    execution_logs TEXT,
+                    storage_location TEXT,
                     created_at TEXT NOT NULL
                 );
 
@@ -170,6 +172,16 @@ class DatabaseManager:
             # Safe auto-migration for legacy schema instances
             try:
                 conn.execute("ALTER TABLE backup_jobs ADD COLUMN is_dry_run INTEGER DEFAULT 0")
+            except Exception:
+                pass
+
+            try:
+                conn.execute("ALTER TABLE backup_jobs ADD COLUMN execution_logs TEXT")
+            except Exception:
+                pass
+
+            try:
+                conn.execute("ALTER TABLE backup_jobs ADD COLUMN storage_location TEXT")
             except Exception:
                 pass
 
@@ -440,7 +452,9 @@ class DatabaseManager:
         duration_seconds: float = 0.0,
         manifest_json: str = "{}",
         error_message: str = None,
-        is_dry_run: int = 0
+        is_dry_run: int = 0,
+        execution_logs: str = "",
+        storage_location: str = ""
     ) -> int:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with self.connection() as conn:
@@ -449,17 +463,23 @@ class DatabaseManager:
                 INSERT INTO backup_jobs (
                     client_id, trigger_type, status, run_date, run_timestamp,
                     files_added, files_updated, files_deleted, dbs_dumped,
-                    total_bytes, duration_seconds, manifest_json, error_message, is_dry_run, created_at
+                    total_bytes, duration_seconds, manifest_json, error_message,
+                    is_dry_run, execution_logs, storage_location, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     client_id, trigger_type, status, run_date, run_timestamp,
                     files_added, files_updated, files_deleted, dbs_dumped,
-                    total_bytes, duration_seconds, manifest_json, error_message, is_dry_run, now_iso
+                    total_bytes, duration_seconds, manifest_json, error_message,
+                    is_dry_run, execution_logs, storage_location, now_iso
                 )
             )
             return cur.lastrowid
+
+    def update_backup_job_logs(self, job_id: int, logs: str):
+        with self.connection() as conn:
+            conn.execute("UPDATE backup_jobs SET execution_logs = ? WHERE id = ?", (logs, job_id))
 
     def get_backup_job(self, job_id: int) -> Optional[Dict[str, Any]]:
         with self.connection() as conn:

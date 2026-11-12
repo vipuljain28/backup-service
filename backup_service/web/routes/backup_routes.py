@@ -1,11 +1,13 @@
 """Backup Execution, Scheduling & Monitoring Routes."""
 
+import io
+import os
 import json
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Depends, HTTPException, Form, BackgroundTasks
 from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
-from typing import Optional
+from typing import Optional, Dict
 
 from backup_service.web.routes.auth_routes import require_auth
 from backup_service.security.auth import Role
@@ -16,6 +18,23 @@ from backup_service.core.orchestrator import BackupOrchestrator
 
 logger = logging.getLogger("backup_service.web.backups")
 router = APIRouter(tags=["Backup Operations"])
+
+# In-memory buffer tracking live active logs for running backup jobs
+ACTIVE_BACKUP_LOGS: Dict[int, io.StringIO] = {}
+
+
+class JobLogCaptureHandler(logging.Handler):
+    """Custom in-memory log handler capturing live execution logs per backup job."""
+    def __init__(self, buffer: io.StringIO):
+        super().__init__()
+        self.buffer = buffer
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.buffer.write(msg + "\n")
+        except Exception:
+            pass
 
 
 def _execute_backup_task(app_state, client_id_num: int, trigger_type: str = "manual", dry_run: bool = False, job_id: int = None):
@@ -120,20 +139,42 @@ def _execute_backup_task(app_state, client_id_num: int, trigger_type: str = "man
 
     orchestrator = BackupOrchestrator(app_cfg)
 
+    now_utc = datetime.now(timezone.utc)
+    run_date_str = now_utc.strftime("%Y-%m-%d")
+
     # If job_id wasn't created prior to worker invocation, record it now
     if not job_id:
-        now_utc = datetime.now(timezone.utc)
         job_id = db.record_backup_job(
             client_id=client_id_num,
             trigger_type=trigger_type,
             status="running",
-            run_date=now_utc.strftime("%Y-%m-%d"),
+            run_date=run_date_str,
             run_timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S"),
             is_dry_run=1 if dry_run else 0
         )
 
+    # Attach in-memory live log collector
+    log_buf = io.StringIO()
+    handler = JobLogCaptureHandler(log_buf)
+    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S"))
+    bs_logger = logging.getLogger("backup_service")
+    bs_logger.addHandler(handler)
+    ACTIVE_BACKUP_LOGS[job_id] = log_buf
+
+    # Compute target storage location description
+    if storage_type == "gdrive":
+        storage_dest = f"Google Drive ➔ {gdrive_cfg.root_folder_name}/{client_cfg.client_id}/incremental/{run_date_str}/"
+    else:
+        abs_local = os.path.abspath(local_storage_root)
+        storage_dest = f"Local Storage ➔ {abs_local}\\{client_cfg.client_id}\\incremental\\{run_date_str}\\"
+
+    if dry_run:
+        storage_dest = f"[DRY RUN SIMULATION] Target: {storage_dest}"
+
     try:
+        logger.info("Initializing backup execution on backend for tenant: %s", client_cfg.display_name)
         report = orchestrator.run_backup_for_client(client_cfg, dry_run=dry_run)
+        final_logs = log_buf.getvalue()
         with db.connection() as conn:
             conn.execute(
                 """
@@ -145,7 +186,9 @@ def _execute_backup_task(app_state, client_id_num: int, trigger_type: str = "man
                     dbs_dumped = ?,
                     total_bytes = ?,
                     duration_seconds = ?,
-                    manifest_json = ?
+                    manifest_json = ?,
+                    execution_logs = ?,
+                    storage_location = ?
                 WHERE id = ?
                 """,
                 (
@@ -156,17 +199,22 @@ def _execute_backup_task(app_state, client_id_num: int, trigger_type: str = "man
                     report.total_incremental_bytes,
                     report.duration_seconds,
                     json.dumps(report.generate_json()),
+                    final_logs,
+                    storage_dest,
                     job_id
                 )
             )
         logger.info("Backup job #%s for '%s' completed successfully.", job_id, client_data["client_id"])
     except Exception as exc:
         logger.error("Backup job #%s failed: %s", job_id, exc)
+        final_logs = log_buf.getvalue() + f"\n[FATAL ERROR] Backup execution failed: {exc}"
         with db.connection() as conn:
             conn.execute(
-                "UPDATE backup_jobs SET status = 'failed', error_message = ? WHERE id = ?",
-                (str(exc), job_id)
+                "UPDATE backup_jobs SET status = 'failed', error_message = ?, execution_logs = ?, storage_location = ? WHERE id = ?",
+                (str(exc), final_logs, storage_dest, job_id)
             )
+    finally:
+        bs_logger.removeHandler(handler)
 
 
 @router.get("/backups")
@@ -270,8 +318,33 @@ async def get_job_status(job_id: int, request: Request, user: dict = Depends(req
         "dbs_dumped": job["dbs_dumped"] or 0,
         "total_bytes": job["total_bytes"] or 0,
         "duration_seconds": round(job["duration_seconds"] or 0.0, 2),
+        "storage_location": job.get("storage_location") or "",
         "error_message": job.get("error_message"),
         "run_timestamp": job["run_timestamp"]
+    }
+
+
+@router.get("/api/v1/backups/jobs/{job_id}/logs")
+async def get_job_logs(job_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Fetch live or completed execution logs for a backup job."""
+    db = request.app.state.db_manager
+    job = db.get_backup_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    live_buf = ACTIVE_BACKUP_LOGS.get(job_id)
+    if live_buf:
+        current_logs = live_buf.getvalue()
+    else:
+        current_logs = job.get("execution_logs") or ""
+
+    return {
+        "id": job["id"],
+        "status": job["status"],
+        "is_dry_run": bool(job.get("is_dry_run", 0)),
+        "storage_location": job.get("storage_location") or "",
+        "total_bytes": job.get("total_bytes") or 0,
+        "logs": current_logs
     }
 
 

@@ -1,0 +1,46 @@
+name: Enterprise Backup CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Automated Unit & Security Test Harness
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install System Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-client default-mysql-client postgresql-client
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backup_service/requirements.txt
+
+      - name: Run Test Suite & Generate HTML Report
+        run: |
+          python -m backup_service.tests.run_all_tests
+
+      - name: Upload Test Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-py${{ matrix.python-version }}
+          path: backup_service/tests/test_report.html

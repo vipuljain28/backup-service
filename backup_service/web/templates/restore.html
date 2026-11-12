@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Disaster Recovery & Restore - Enterprise Backup{% endblock %}
+{% block header_title %}Disaster Recovery & Point-in-Time Restoration{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Two Column Layout: Restore Wizard & Existing Archive Reconnection -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- Panel 1: Point-in-Time Restore Wizard -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+      <div class="border-b border-gray-100 pb-3">
+        <h3 class="font-bold text-gray-900 text-base">Point-in-Time Disaster Recovery</h3>
+        <p class="text-xs text-gray-500 mt-1">Restore databases and file hierarchies to original servers or new disaster recovery hosts.</p>
+      </div>
+
+      <form method="POST" action="/restores/trigger" class="space-y-4 text-sm">
+        <div>
+          <label class="block font-medium text-gray-700">Select Backup Snapshot</label>
+          <select name="backup_job_id" required class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
+            <option value="" disabled selected>-- Choose historical snapshot --</option>
+            {% for b in backup_jobs %}
+            <option value="{{ b.id }}">[{{ b.run_date }}] {{ b.client_name }} ({{ b.status|upper }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-medium text-gray-700">Restoration Destination</label>
+          <select name="target_location_type" id="restore-dest-select" onchange="toggleRestoreDest(this.value)" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <option value="original">Original Location (Source Servers & DBs)</option>
+            <option value="new">New Location (Disaster Recovery Host / Directory)</option>
+          </select>
+        </div>
+
+        <div id="new-location-fields" class="space-y-3 p-3 bg-gray-50 border rounded-md hidden">
+          <div>
+            <label class="block font-medium text-gray-700 text-xs">New Target File Directory</label>
+            <input type="text" name="target_path" placeholder="/opt/dr_restored_data" class="mt-1 block w-full border rounded-md px-3 py-1.5 text-xs">
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700 text-xs">New Target Database Name</label>
+            <input type="text" name="target_db_name" placeholder="star_dr_recovered" class="mt-1 block w-full border rounded-md px-3 py-1.5 text-xs">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-medium text-gray-700">Restoration Scope</label>
+          <select name="restore_scope" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <option value="all">Full Recovery (Databases + Files)</option>
+            <option value="files_only">Files Only</option>
+            <option value="db_only">Database Only</option>
+          </select>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-md shadow text-sm">
+            Execute Point-in-Time Restoration
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Panel 2: Reconnect Existing Backups to New Installation -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+      <div class="border-b border-gray-100 pb-3">
+        <h3 class="font-bold text-gray-900 text-base">Attach Existing Cloud Backups</h3>
+        <p class="text-xs text-gray-500 mt-1">Deployed a fresh installation? Scan your existing Google Drive, OneDrive, or Local backup folders to immediately import past historical archives.</p>
+      </div>
+
+      <form method="POST" action="/restores/reconnect" class="space-y-4 text-sm">
+        <div>
+          <label class="block font-medium text-gray-700">Storage Gateway</label>
+          <select name="storage_config_id" required class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
+            <option value="" disabled selected>-- Select Configured Gateway --</option>
+            {% for sc in storage_configs %}
+            <option value="{{ sc.id }}">{{ sc.name }} ({{ sc.provider_type|upper }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 space-y-2">
+          <p class="font-bold">What happens during Reconnection:</p>
+          <ul class="list-disc list-inside space-y-1">
+            <li>Scans the root backup directory for client tenant folders.</li>
+            <li>Detects all date snapshots and reads historical manifests.</li>
+            <li>Automatically populates your local catalog with past database dumps.</li>
+            <li>Enables immediate restoration without running a backup first.</li>
+          </ul>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md shadow text-sm">
+            Scan & Reconnect Existing Backups
+          </button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- Historical Restores Table -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-gray-200">
+      <h3 class="font-bold text-gray-800">Restoration Operations Log</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
+          <tr>
+            <th class="px-6 py-3">Job ID</th>
+            <th class="px-6 py-3">Client</th>
+            <th class="px-6 py-3">Initiated Time</th>
+            <th class="px-6 py-3">Scope</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3 text-right">Execution Logs</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 text-gray-700">
+          {% for r in restore_jobs %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 font-mono font-bold text-xs text-gray-900">#{{ r.id }}</td>
+            <td class="px-6 py-4 font-semibold">{{ r.client_name }}</td>
+            <td class="px-6 py-4 font-mono text-xs">{{ r.created_at }}</td>
+            <td class="px-6 py-4 text-xs font-semibold uppercase">{{ r.restore_scope }}</td>
+            <td class="px-6 py-4">
+              {% if r.status == 'success' %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">SUCCESS</span>
+              {% elif r.status == 'running' %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 animate-pulse">RUNNING</span>
+              {% else %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">{{ r.status|upper }}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-right">
+              <button onclick="alert('Logs:\n' + {{ r.execution_logs|tojson }})" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded border">
+                View Log Output
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-6 py-8 text-center text-gray-400">No restoration jobs executed yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleRestoreDest(val) {
+  const fields = document.getElementById('new-location-fields');
+  if (val === 'new') fields.classList.remove('hidden');
+  else fields.classList.add('hidden');
+}
+</script>
+{% endblock %}

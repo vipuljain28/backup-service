@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Enterprise Backup & Disaster Recovery{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <style>
+    .bg-sidebar { background-color: #0f172a; }
+    .bg-main { background-color: #f8fafc; }
+  </style>
+</head>
+<body class="bg-main text-gray-800 font-sans antialiased flex h-screen overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-sidebar text-gray-300 flex flex-col justify-between shadow-xl flex-shrink-0">
+    <div>
+      <div class="h-16 flex items-center px-6 bg-gray-900 border-b border-gray-800">
+        <span class="text-xl font-bold tracking-wider text-white">STAR<span class="text-blue-500">BACKUP</span></span>
+      </div>
+      <nav class="mt-6 px-4 space-y-1">
+        <a href="/" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'dashboard' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
+          Dashboard
+        </a>
+        <a href="/clients" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'clients' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
+          Clients & Targets
+        </a>
+        <a href="/storage" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'storage' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
+          Cloud Storage Hub
+        </a>
+        <a href="/backups" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'backups' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
+          Backups & Schedules
+        </a>
+        <a href="/restores" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'restore' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
+          Disaster Recovery
+        </a>
+        <a href="/system" class="flex items-center px-4 py-3 rounded-lg text-sm font-medium {% if active_tab == 'system' %}bg-blue-600 text-white{% else %}hover:bg-gray-800 text-gray-300{% endif %}">
+          System & Auditing
+        </a>
+      </nav>
+    </div>
+
+    <!-- User Profile & Logout -->
+    <div class="p-4 border-t border-gray-800 bg-gray-900">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-semibold text-white">{{ user.username if user else 'Operator' }}</p>
+          <span class="inline-block px-2 py-0.5 text-xs font-semibold uppercase rounded bg-gray-700 text-blue-400">
+            {{ user.role if user else 'admin' }}
+          </span>
+        </div>
+        <a href="/logout" class="text-gray-400 hover:text-red-400 text-sm font-medium">Logout</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Wrapper -->
+  <div class="flex-1 flex flex-col overflow-y-auto">
+    <!-- Top Header -->
+    <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
+      <h1 class="text-xl font-bold text-gray-800">{% block header_title %}Overview{% endblock %}</h1>
+      <div class="flex items-center space-x-4">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full"></span> Service Online
+        </span>
+      </div>
+    </header>
+
+    <!-- Page Body -->
+    <main class="p-8">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

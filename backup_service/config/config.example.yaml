@@ -1,0 +1,129 @@
+# ==============================================================================
+# Enterprise Google Drive Multi-Tenant Backup Service Configuration
+# ==============================================================================
+# Supports:
+#  - Multiple clients with identical folder structure
+#  - Multiple databases per client (MySQL, MariaDB, PostgreSQL)
+#  - Multiple folder paths per client
+#  - Master baseline + Date-wise incremental file backups
+#  - Non-destructive delta sync (never deletes files from backup; logs deletions)
+#  - Full database backups inside each date-wise folder
+#  - 10-day sliding retention policy for incremental and DB backups
+#  - Local execution OR Remote SSH execution
+#  - Environment variable interpolation: ${VAR:-default}
+# ==============================================================================
+
+storage_provider: "gdrive" # "gdrive" for Google Drive, or "local" for local filesystem/NAS
+local_storage_root: "./local_cloud_backup" # Used only if storage_provider is "local"
+
+# Temporary local staging directory (cleaned up automatically after sync)
+staging_dir: "./temp_staging"
+
+# SQLite catalog database maintaining delta state across runs
+catalog_db_path: "./backup_catalog.sqlite"
+
+# Default retention days for incremental & DB backups (can override per client)
+retention_days_default: 10
+
+# Google Drive Cloud Storage Settings
+gdrive:
+  # "service_account" (recommended for servers/cron) or "oauth_user"
+  auth_mode: "service_account"
+  
+  # Path to Service Account JSON key downloaded from Google Cloud Console
+  service_account_file: "./service_account.json"
+
+  # Optional: OAuth credentials if using auth_mode: "oauth_user"
+  oauth_client_file: "./client_secret.json"
+  oauth_token_file: "./token.json"
+
+  # Google Drive folder where all client backups will be organized
+  root_folder_name: "STAR_Enterprise_Backups"
+  
+  # Optional: specify an explicit folder ID (overrides root_folder_name)
+  # root_folder_id: "1A2B3C4D5E6F7G8H9I0J"
+  
+  # Optional: Shared Drive (Team Drive) ID if uploading to an enterprise Shared Drive
+  # shared_drive_id: "0A1B2C3D4E5F6G7H"
+
+# ==============================================================================
+# Multi-Client Definitions
+# ==============================================================================
+clients:
+  # ----------------------------------------------------------------------------
+  # Client 1: Running directly on Linux Server (Local Mode)
+  # ----------------------------------------------------------------------------
+  - client_id: "client_star_local"
+    display_name: "STAR Calibration - Local Server"
+    connection_mode: "local"
+    retention_days: 10 # 10 days retention for incremental and DB dumps
+
+    # Multiple databases for this client
+    databases:
+      - name: "star_main_db"
+        engine: "mysql"
+        host: "127.0.0.1"
+        port: 3306
+        user: "${DB_USER:-root}"
+        password: "${DB_PASSWORD:-secret}"
+        db_name: "starcalibration"
+        dump_options:
+          - "--single-transaction"
+          - "--quick"
+          - "--routines"
+          - "--triggers"
+
+      - name: "star_audit_db"
+        engine: "mysql"
+        host: "127.0.0.1"
+        port: 3306
+        user: "${DB_USER:-root}"
+        password: "${DB_PASSWORD:-secret}"
+        db_name: "star_audit"
+
+    # Multiple folders to back up for this client
+    file_sources:
+      - id: "calibration_data"
+        path: "/var/www/star/calibrationdata"
+        exclude_patterns:
+          - "*.tmp"
+          - "*.log"
+          - ".cache/*"
+
+      - id: "system_docs"
+        path: "/var/www/star/docs"
+        exclude_patterns:
+          - "*.git/*"
+
+  # ----------------------------------------------------------------------------
+  # Client 2: Remote Linux Server accessed via SSH from Localhost
+  # ----------------------------------------------------------------------------
+  - client_id: "client_remote_node"
+    display_name: "Remote Client Node (via SSH)"
+    connection_mode: "ssh"
+    retention_days: 10
+
+    # SSH Connection Details
+    ssh:
+      host: "192.168.1.100"
+      port: 22
+      user: "deploy"
+      key_path: "~/.ssh/id_rsa"
+      # password: "${SSH_PASSWORD}" # Use key_path or password
+      timeout_seconds: 30
+
+    databases:
+      - name: "remote_production_db"
+        engine: "mysql"
+        host: "127.0.0.1"
+        port: 3306
+        user: "dbadmin"
+        password: "${REMOTE_DB_PASS:-secret123}"
+        db_name: "client_portal"
+
+    file_sources:
+      - id: "client_uploads"
+        path: "/home/deploy/app/uploads"
+        exclude_patterns:
+          - "*.tmp"
+          - "*.swp"

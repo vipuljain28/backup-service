@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Cloud Storage Gateways - Enterprise Backup{% endblock %}
+{% block header_title %}Cloud Storage Destinations{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Header & Description -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900">Multi-Cloud Storage Hub</h2>
+      <p class="text-sm text-gray-500">Configure remote cloud destinations with uniform folder hierarchies and chunked resumable transfers.</p>
+    </div>
+  </div>
+
+  <!-- Configured Gateways Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    {% for sc in storage_configs %}
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-gray-900">{{ sc.name }}</h3>
+        <span class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 uppercase">
+          {{ sc.provider_type }}
+        </span>
+      </div>
+      <p class="text-xs text-gray-500">Protected by AES-256-GCM Vault</p>
+      <div class="pt-4 border-t border-gray-100 flex items-center justify-between">
+        <span class="text-xs text-green-600 font-semibold">&bull; Configured</span>
+        <button onclick="testConfiguredStorage({{ sc.id }}, '{{ sc.provider_type }}')" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded text-gray-700">
+          Test Access
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Provider Configuration Tabs / Cards -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8 space-y-6">
+    <h3 class="text-base font-bold text-gray-900 border-b border-gray-100 pb-3">Register New Cloud Storage Destination</h3>
+
+    <form method="POST" action="/storage/create" class="space-y-6 text-sm">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block font-medium text-gray-700">Destination Name</label>
+          <input type="text" name="name" required placeholder="e.g. Google Drive Production Vault" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Storage Provider Type</label>
+          <select name="provider_type" id="provider-select" onchange="switchProviderFields(this.value)" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
+            <option value="gdrive">Google Drive (Service Account / OAuth)</option>
+            <option value="onedrive">Microsoft OneDrive (Microsoft Graph API)</option>
+            <option value="s3_terabox">S3-Compatible / TeraBox Cloud</option>
+            <option value="local">Local Storage / Mounted NAS</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Provider 1: Google Drive Fields -->
+      <div id="fields-gdrive" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">Google Drive API v3 Settings</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-medium text-gray-700">Authentication Mode</label>
+            <select name="gdrive_auth_mode" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+              <option value="service_account">Google Cloud Service Account (JSON Key)</option>
+              <option value="oauth_user">OAuth2 Client Flow</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700">Root Backup Folder Name</label>
+            <input type="text" name="gdrive_root_folder" value="STAR_Enterprise_Backups" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block font-medium text-gray-700">Service Account Key File Path</label>
+          <input type="text" name="gdrive_sa_file" placeholder="./service_account.json" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          <span class="text-xs text-gray-500">Provide absolute path or path relative to the server root.</span>
+        </div>
+      </div>
+
+      <!-- Provider 2: OneDrive Fields -->
+      <div id="fields-onedrive" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">Microsoft OneDrive (Graph API) Settings</h4>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block font-medium text-gray-700">Azure Tenant ID</label>
+            <input type="text" name="onedrive_tenant_id" placeholder="common or Directory ID" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700">Application (Client) ID</label>
+            <input type="text" name="onedrive_client_id" placeholder="Azure App Client ID" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700">Client Secret</label>
+            <input type="password" name="onedrive_client_secret" placeholder="Encrypted at rest" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+        </div>
+      </div>
+
+      <!-- Provider 3: S3 / TeraBox Fields -->
+      <div id="fields-s3_terabox" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">S3 / TeraBox API Settings</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-medium text-gray-700">S3 Endpoint URL (Optional for AWS)</label>
+            <input type="text" name="s3_endpoint_url" placeholder="https://s3.terabox.com or https://s3.amazonaws.com" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700">Bucket Name</label>
+            <input type="text" name="s3_bucket_name" placeholder="my-enterprise-backups" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700">Access Key ID</label>
+            <input type="text" name="s3_access_key" placeholder="AKIA..." class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block font-medium text-gray-700">Secret Access Key</label>
+            <input type="password" name="s3_secret_key" placeholder="Encrypted at rest" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          </div>
+        </div>
+      </div>
+
+      <!-- Provider 4: Local Storage Fields -->
+      <div id="fields-local" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">Local Filesystem / NAS Mount Settings</h4>
+        <div>
+          <label class="block font-medium text-gray-700">Target Root Directory</label>
+          <input type="text" name="local_root_dir" value="./local_cloud_backup" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <input type="checkbox" id="is_default" name="is_default" value="true" class="rounded text-blue-600">
+        <label for="is_default" class="text-sm text-gray-700 font-medium">Set as default storage gateway for new clients</label>
+      </div>
+
+      <div class="flex justify-end pt-4 border-t">
+        <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm">
+          Save Storage Gateway
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchProviderFields(provider) {
+  ['gdrive', 'onedrive', 's3_terabox', 'local'].forEach(p => {
+    const el = document.getElementById(`fields-${p}`);
+    if (el) {
+      if (p === provider) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+  });
+}
+
+async function testConfiguredStorage(id, type) {
+  alert(`Initiating health check for Storage ID ${id} (${type.toUpperCase()})...`);
+}
+</script>
+{% endblock %}

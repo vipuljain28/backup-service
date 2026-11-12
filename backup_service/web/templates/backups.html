@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Backups & Schedules - Enterprise Backup{% endblock %}
+{% block header_title %}Backup Execution & History{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Trigger & Manual Execution Card -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-gray-900">Execute On-Demand Backup</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Triggers complete database full dumps, differential file scans, and uniform cloud sync.</p>
+      </div>
+
+      <form method="POST" action="/backups/trigger" class="mt-4 md:mt-0 flex items-center space-x-3">
+        <select name="client_id" required class="border rounded-md px-3 py-2 text-sm font-medium">
+          <option value="" disabled selected>-- Select Client Tenant --</option>
+          {% for c in clients %}
+          <option value="{{ c.id }}">{{ c.display_name }} ({{ c.client_id }})</option>
+          {% endfor %}
+        </select>
+
+        <label class="flex items-center space-x-1.5 text-xs text-gray-600 font-medium">
+          <input type="checkbox" name="dry_run" value="true" class="rounded text-blue-600">
+          <span>Dry Run</span>
+        </label>
+
+        <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md text-sm shadow">
+          Run Backup Now
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Backup Execution History Table -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-gray-200 flex items-center justify-between">
+      <h3 class="font-bold text-gray-800">Historical Snapshot Ledger</h3>
+      <span class="text-xs text-gray-500">10-Day Sliding Window Active</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
+          <tr>
+            <th class="px-6 py-3">Client</th>
+            <th class="px-6 py-3">Execution Time</th>
+            <th class="px-6 py-3">Trigger</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">File Changes</th>
+            <th class="px-6 py-3">Volume</th>
+            <th class="px-6 py-3">Duration</th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 text-gray-700">
+          {% for job in jobs %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 font-semibold text-gray-900">{{ job.client_name }}</td>
+            <td class="px-6 py-4 font-mono text-xs">{{ job.run_timestamp }}</td>
+            <td class="px-6 py-4 text-xs font-semibold uppercase text-gray-500">{{ job.trigger_type }}</td>
+            <td class="px-6 py-4">
+              {% if job.status == 'success' %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">SUCCESS</span>
+              {% elif job.status == 'running' %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 animate-pulse">RUNNING</span>
+              {% else %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">{{ job.status|upper }}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 font-mono text-xs">
+              <span class="text-green-600">+{{ job.files_added }}</span>
+              <span class="text-blue-600 ml-1">*{{ job.files_updated }}</span>
+              <span class="text-yellow-600 ml-1">-{{ job.files_deleted }} (preserved)</span>
+              <span class="text-purple-600 ml-1">DBs: {{ job.dbs_dumped }}</span>
+            </td>
+            <td class="px-6 py-4 font-mono text-xs text-gray-600">
+              {{ (job.total_bytes / (1024 * 1024))|round(2) }} MB
+            </td>
+            <td class="px-6 py-4 text-xs text-gray-600">
+              {{ job.duration_seconds|round(2) }}s
+            </td>
+            <td class="px-6 py-4 text-right">
+              <button onclick="viewManifest({{ job.id }})" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-semibold rounded text-gray-800 border">
+                View Manifest
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="px-6 py-8 text-center text-gray-400">No backup records found. Trigger your first backup above.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Manifest Viewer Modal -->
+<div id="modal-manifest" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 flex flex-col max-h-screen">
+    <div class="flex justify-between items-center mb-4 pb-2 border-b">
+      <h3 class="text-lg font-bold text-gray-900" id="manifest-title">Backup Audit Manifest</h3>
+      <button onclick="document.getElementById('modal-manifest').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">&times;</button>
+    </div>
+    <div class="overflow-y-auto flex-1 font-mono text-xs bg-gray-900 text-gray-200 p-4 rounded-lg">
+      <pre id="manifest-content">Loading manifest...</pre>
+    </div>
+    <div class="flex justify-end pt-4 border-t mt-4">
+      <button onclick="document.getElementById('modal-manifest').classList.add('hidden')" class="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-md text-xs font-semibold">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function viewManifest(jobId) {
+  const modal = document.getElementById('modal-manifest');
+  const content = document.getElementById('manifest-content');
+  content.innerText = "Loading audit manifest...";
+  modal.classList.remove('hidden');
+
+  try {
+    const resp = await fetch(`/api/v1/backups/jobs/${jobId}/manifest`);
+    const data = await resp.json();
+    content.innerText = JSON.stringify(data, null, 2);
+  } catch (err) {
+    content.innerText = "Failed to load manifest: " + err;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "enterprise-backup-service"
+version = "1.0.0"
+description = "Enterprise-Grade Multi-Tenant Backup & Disaster Recovery Management Platform"
+authors = [
+    { name = "Vipul Jain", email = "vipuljain2806@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["backup", "disaster-recovery", "google-drive", "onedrive", "s3", "fastapi", "enterprise", "owasp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: System :: Recovery Tools",
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "jinja2>=3.1.4",
+    "python-multipart>=0.0.12",
+    "pydantic>=2.10.0",
+    "PyYAML>=6.0.0",
+    "google-api-python-client>=2.150.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.0",
+    "paramiko>=3.5.0",
+    "cryptography>=43.0.0",
+    "requests>=2.32.0",
+    "apscheduler>=3.10.0",
+]
+
+[project.scripts]
+starbackup = "backup_service.cli:main"
+starbackup-web = "backup_service.web.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backup_service*"]

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Enterprise Backup & Disaster Recovery</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <style>
+    body { background: radial-gradient(circle at top, #1e293b, #0f172a); }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="max-w-md w-full bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 text-white">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-extrabold tracking-wider">STAR<span class="text-blue-500">BACKUP</span></h1>
+      <p class="text-gray-400 text-sm mt-1">Enterprise Backup & Disaster Recovery</p>
+    </div>
+
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-900 border border-red-700 text-red-200 text-sm">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/login" class="space-y-6">
+      <div>
+        <label for="username" class="block text-sm font-medium text-gray-300">Username</label>
+        <input type="text" id="username" name="username" required autofocus
+               class="mt-1 block w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <div>
+        <label for="password" class="block text-sm font-medium text-gray-300">Password</label>
+        <input type="password" id="password" name="password" required
+               class="mt-1 block w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <button type="submit"
+              class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        Sign In to Management Console
+      </button>
+    </form>
+
+    <div class="mt-8 text-center text-xs text-gray-500">
+      <p>Protected by AES-256-GCM Vault & OWASP Compliant RBAC</p>
+      <p class="mt-1">Default credentials: admin / admin@STAR2026!</p>
+    </div>
+  </div>
+</body>
+</html>

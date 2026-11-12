@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}System & Security Auditing - Enterprise Backup{% endblock %}
+{% block header_title %}System Diagnostics & Security Audit Ledger{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- GitHub Updates & Versioning Panel -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between">
+      <div>
+        <h3 class="font-bold text-gray-900 text-base">Release & GitHub Update Management</h3>
+        <p class="text-xs text-gray-500 mt-1">Check for releases, view commit status, and apply non-destructive updates via git.</p>
+      </div>
+      <div class="mt-4 md:mt-0 flex space-x-3">
+        <button onclick="checkUpdates()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-md border">
+          Check GitHub
+        </button>
+        {% if user.role == 'admin' %}
+        <button onclick="triggerGitUpdate()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-md shadow">
+          Apply Update (Git Pull)
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t text-xs">
+      <div>
+        <span class="text-gray-500">Active Commit:</span>
+        <span class="font-mono font-bold text-gray-800 ml-1">{{ version_info.local_commit }}</span>
+      </div>
+      <div>
+        <span class="text-gray-500">Branch:</span>
+        <span class="font-mono font-bold text-gray-800 ml-1">{{ version_info.local_branch }}</span>
+      </div>
+      <div>
+        <span class="text-gray-500">Status:</span>
+        <span class="font-bold text-green-600 ml-1">{{ version_info.status }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Immutable Security Audit Log Table -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-gray-200 flex items-center justify-between">
+      <div>
+        <h3 class="font-bold text-gray-800">Immutable Security Audit Trail</h3>
+        <p class="text-xs text-gray-500">OWASP Compliant ledger recording all authentication and configuration mutations.</p>
+      </div>
+      <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">Write-Only Ledger</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
+          <tr>
+            <th class="px-6 py-3">Timestamp (UTC)</th>
+            <th class="px-6 py-3">Actor</th>
+            <th class="px-6 py-3">IP Address</th>
+            <th class="px-6 py-3">Action</th>
+            <th class="px-6 py-3">Resource</th>
+            <th class="px-6 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 text-gray-700">
+          {% for log in audit_logs %}
+          <tr class="hover:bg-gray-50 font-mono text-xs">
+            <td class="px-6 py-3 text-gray-500">{{ log.created_at[:19] }}</td>
+            <td class="px-6 py-3 font-semibold text-gray-900">{{ log.username or 'system' }}</td>
+            <td class="px-6 py-3 text-gray-500">{{ log.ip_address }}</td>
+            <td class="px-6 py-3 font-bold text-blue-700">{{ log.action }}</td>
+            <td class="px-6 py-3 text-gray-600">{{ log.resource_type or '-' }} ({{ log.resource_id or '-' }})</td>
+            <td class="px-6 py-3">
+              {% if log.status == 'SUCCESS' %}
+              <span class="text-green-700 font-bold">SUCCESS</span>
+              {% else %}
+              <span class="text-red-700 font-bold">FAILED</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-6 py-8 text-center text-gray-400">No audit logs recorded yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function checkUpdates() {
+  const resp = await fetch('/api/v1/system/check-update');
+  const data = await resp.json();
+  alert(`GitHub Version Check:\nStatus: ${data.status}\nLatest Release: ${data.latest_release}\nCommit: ${data.local_commit}`);
+}
+
+async function triggerGitUpdate() {
+  if (!confirm("Are you sure you want to pull the latest updates from GitHub?")) return;
+  const resp = await fetch('/api/v1/system/update', { method: 'POST' });
+  const data = await resp.json();
+  alert(data.success ? `Update Applied Successfully!\nOutput: ${data.output}` : `Update Failed: ${data.error || data.message}`);
+}
+</script>
+{% endblock %}

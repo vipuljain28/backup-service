@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Enterprise Backup Platform{% endblock %}
+{% block header_title %}Executive Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Metric KPI Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Client Tenants</p>
+      <p class="text-3xl font-extrabold text-gray-900 mt-2">{{ total_clients }}</p>
+      <p class="text-xs text-green-600 mt-1 font-medium">100% Multi-Tenant Isolation</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Successful Snapshots</p>
+      <p class="text-3xl font-extrabold text-blue-600 mt-2">{{ successful_jobs }}</p>
+      <p class="text-xs text-gray-500 mt-1 font-medium">Across active 10-day retention window</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Retention Policy</p>
+      <p class="text-3xl font-extrabold text-purple-600 mt-2">10 Days</p>
+      <p class="text-xs text-gray-500 mt-1 font-medium">Incremental + DB Purging / Master Preserved</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Storage Gateways</p>
+      <p class="text-3xl font-extrabold text-indigo-600 mt-2">{{ storage_configs|length }}</p>
+      <p class="text-xs text-gray-500 mt-1 font-medium">Google Drive, OneDrive, Local, S3</p>
+    </div>
+  </div>
+
+  <!-- Quick Action Banner -->
+  <div class="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between">
+    <div>
+      <h2 class="text-lg font-bold">Automated Multi-Tenant Backup & Recovery Engine</h2>
+      <p class="text-blue-200 text-sm mt-1">Non-destructive delta tracking ensures files removed from source servers are retained permanently in your master backup.</p>
+    </div>
+    <div class="mt-4 md:mt-0 flex space-x-3">
+      <a href="/clients" class="px-4 py-2 bg-white text-blue-800 font-semibold rounded-lg hover:bg-blue-50 text-sm shadow">
+        Manage Clients
+      </a>
+      <a href="/restores" class="px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-950 text-sm shadow border border-blue-600">
+        Disaster Recovery
+      </a>
+    </div>
+  </div>
+
+  <!-- Two Column Layout: Active Clients & Recent Runs -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- Active Clients Table -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-gray-200 flex items-center justify-between">
+        <h3 class="font-bold text-gray-800">Configured Client Tenants</h3>
+        <a href="/clients" class="text-xs font-semibold text-blue-600 hover:underline">View All &rarr;</a>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
+            <tr>
+              <th class="px-6 py-3">Client Identifier</th>
+              <th class="px-6 py-3">Display Name</th>
+              <th class="px-6 py-3">Storage Gateway</th>
+              <th class="px-6 py-3">Retention</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 text-gray-700">
+            {% for c in clients %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 font-mono font-semibold text-blue-600">{{ c.client_id }}</td>
+              <td class="px-6 py-4 font-medium">{{ c.display_name }}</td>
+              <td class="px-6 py-4">
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                  {{ c.storage_provider or 'Local' }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-gray-600">{{ c.retention_days }} Days</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-8 text-center text-gray-400">No client tenants configured yet. Click "Manage Clients" to add your first client.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Backup Executions -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-gray-200 flex items-center justify-between">
+        <h3 class="font-bold text-gray-800">Recent Backup Executions</h3>
+        <a href="/backups" class="text-xs font-semibold text-blue-600 hover:underline">View All &rarr;</a>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
+            <tr>
+              <th class="px-6 py-3">Client</th>
+              <th class="px-6 py-3">Snapshot Date</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3">Changes</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 text-gray-700">
+            {% for job in recent_jobs %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 font-semibold text-gray-900">{{ job.client_name }}</td>
+              <td class="px-6 py-4 font-mono text-xs">{{ job.run_date }}</td>
+              <td class="px-6 py-4">
+                {% if job.status == 'success' %}
+                <span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800">SUCCESS</span>
+                {% elif job.status == 'running' %}
+                <span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-100 text-yellow-800">RUNNING</span>
+                {% else %}
+                <span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800">{{ job.status|upper }}</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 font-mono text-xs text-gray-600">
+                +{{ job.files_added }} *{{ job.files_updated }} -{{ job.files_deleted }} (DBs: {{ job.dbs_dumped }})
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-8 text-center text-gray-400">No backup runs recorded yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

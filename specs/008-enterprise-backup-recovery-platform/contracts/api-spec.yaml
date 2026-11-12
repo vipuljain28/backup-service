@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: Enterprise Backup & Disaster Recovery Management API
+  version: 1.0.0
+  description: Secure REST API for multi-tenant backup scheduling, multi-cloud storage, directory browsing, non-destructive delta syncing, and point-in-time disaster recovery.
+
+paths:
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate user and issue JWT / session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        200:
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, example: bearer }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      username: { type: string }
+                      role: { type: string, enum: [admin, operator, auditor] }
+
+  /api/v1/storage:
+    get:
+      summary: List configured storage destinations
+      responses:
+        200: { description: List of storage configurations }
+    post:
+      summary: Create new storage destination (Google Drive, OneDrive, Local, S3/TeraBox)
+      responses:
+        201: { description: Storage configuration created }
+
+  /api/v1/storage/test:
+    post:
+      summary: Verify connectivity and access for storage configuration
+      responses:
+        200: { description: Connection verification outcome }
+
+  /api/v1/clients:
+    get:
+      summary: List all client tenants
+      responses:
+        200: { description: List of clients }
+    post:
+      summary: Create a new client tenant
+      responses:
+        201: { description: Client created }
+
+  /api/v1/servers/{id}/browse:
+    get:
+      summary: Interactively browse filesystem directory tree on local or remote SSH host
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: path
+          in: query
+          required: false
+          schema: { type: string, default: "/" }
+      responses:
+        200:
+          description: Directory listing with files, folders, sizes, and permissions
+
+  /api/v1/databases/test:
+    post:
+      summary: Test database connection and SSL negotiation
+      responses:
+        200: { description: Database connectivity test outcome }
+
+  /api/v1/backups/trigger:
+    post:
+      summary: Manually trigger an immediate backup for a client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id]
+              properties:
+                client_id: { type: integer }
+                dry_run: { type: boolean, default: false }
+      responses:
+        202: { description: Backup job initiated in background }
+
+  /api/v1/restore/trigger:
+    post:
+      summary: Trigger point-in-time disaster recovery to original or new location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [backup_job_id]
+              properties:
+                backup_job_id: { type: integer }
+                target_server_id: { type: integer }
+                target_path: { type: string }
+                target_db_name: { type: string }
+                restore_scope: { type: string, enum: [all, files_only, db_only] }
+      responses:
+        202: { description: Restore job initiated in background }
+
+  /api/v1/restore/import-existing:
+    post:
+      summary: Scan existing backup storage folder and reconstitute past backup archives
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [storage_config_id, root_folder_name]
+              properties:
+                storage_config_id: { type: integer }
+                root_folder_name: { type: string }
+      responses:
+        200: { description: Discovered and imported backup archives }
+
+  /api/v1/system/check-update:
+    get:
+      summary: Compare current version with GitHub repository releases
+      responses:
+        200: { description: Update status and release notes }

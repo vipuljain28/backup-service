@@ -71,6 +71,45 @@ class LocalDriver(SourceDriver):
         shutil.copy2(file_info.abs_path_or_remote, str(local_dest))
         return local_dest
 
+    def fetch_files_batch(
+        self,
+        tasks: List[tuple],
+        max_workers: int = 8,
+        progress_callback: object = None
+    ) -> List[tuple]:
+        """Copy local files in parallel worker threads."""
+        if not tasks:
+            return []
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        results = []
+        completed_count = 0
+        total_count = len(tasks)
+
+        def _copy_task(t):
+            fi, dest = t
+            dest = Path(dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(fi.abs_path_or_remote, str(dest))
+            return fi, dest
+
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="local_copy") as executor:
+            future_to_task = {executor.submit(_copy_task, t): t for t in tasks}
+            for fut in as_completed(future_to_task):
+                orig = future_to_task[fut]
+                try:
+                    fi, dest = fut.result()
+                    results.append((fi, dest, None))
+                except Exception as exc:
+                    results.append((orig[0], orig[1], exc))
+
+                completed_count += 1
+                if progress_callback and (completed_count % 100 == 0 or completed_count == total_count):
+                    progress_callback(completed_count, total_count, orig[0].rel_path)
+
+        return results
+
     def verify_database_access(self, db_config: DatabaseConfig) -> None:
         """Verify local database connectivity and credentials without dumping data."""
         from backup_service.drivers.db_checker import DatabaseChecker

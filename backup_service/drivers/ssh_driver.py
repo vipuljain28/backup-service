@@ -10,8 +10,10 @@ import os
 import json
 import shlex
 import logging
+import threading
 from pathlib import Path
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Tuple, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import fnmatch
 from backup_service.drivers.base import SourceDriver, SourceFileInfo
 from backup_service.config.settings import SSHConfig, DatabaseConfig
@@ -26,6 +28,7 @@ class SSHDriver(SourceDriver):
         self.config = ssh_config
         self._client = None
         self._sftp = None
+        self._thread_local = threading.local()
 
     def _get_client(self):
         """Establish or return active Paramiko SSHClient."""
@@ -153,6 +156,21 @@ class SSHDriver(SourceDriver):
 
         yield from _walk_sftp(base_path)
 
+    def _get_thread_sftp(self):
+        """Get or initialize thread-local SFTP client multiplexed over active SSH transport."""
+        sftp = getattr(self._thread_local, "sftp", None)
+        if sftp is None:
+            import paramiko
+            client = self._get_client()
+            transport = client.get_transport()
+            if not transport or not transport.is_active():
+                self._client = None
+                client = self._get_client()
+                transport = client.get_transport()
+            sftp = paramiko.SFTPClient.from_transport(transport)
+            self._thread_local.sftp = sftp
+        return sftp
+
     def fetch_file(self, file_info: SourceFileInfo, local_dest: Path) -> Path:
         """Download remote file via SFTP into local destination."""
         local_dest = Path(local_dest)
@@ -160,6 +178,45 @@ class SSHDriver(SourceDriver):
         sftp = self._get_sftp()
         sftp.get(file_info.abs_path_or_remote, str(local_dest))
         return local_dest
+
+    def fetch_files_batch(
+        self,
+        tasks: List[Tuple[SourceFileInfo, Path]],
+        max_workers: int = 8,
+        progress_callback: Optional[Any] = None
+    ) -> List[Tuple[SourceFileInfo, Path, Optional[Exception]]]:
+        """Download remote files in parallel across concurrent SFTP worker threads."""
+        if not tasks:
+            return []
+
+        results = []
+        completed_count = 0
+        total_count = len(tasks)
+
+        def _worker(task: Tuple[SourceFileInfo, Path]):
+            file_info, local_dest = task
+            local_dest = Path(local_dest)
+            local_dest.parent.mkdir(parents=True, exist_ok=True)
+            sftp = self._get_thread_sftp()
+            sftp.get(file_info.abs_path_or_remote, str(local_dest))
+            return file_info, local_dest
+
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sftp_pool") as executor:
+            future_to_task = {executor.submit(_worker, t): t for t in tasks}
+            for future in as_completed(future_to_task):
+                orig_task = future_to_task[future]
+                try:
+                    fi, dest = future.result()
+                    results.append((fi, dest, None))
+                except Exception as exc:
+                    logger.error("Parallel SFTP fetch error on '%s': %s", orig_task[0].rel_path, exc)
+                    results.append((orig_task[0], orig_task[1], exc))
+
+                completed_count += 1
+                if progress_callback and (completed_count % 50 == 0 or completed_count == total_count):
+                    progress_callback(completed_count, total_count, orig_task[0].rel_path)
+
+        return results
 
     def verify_database_access(self, db_config: DatabaseConfig) -> None:
         """Verify database connectivity and credentials without dumping data."""

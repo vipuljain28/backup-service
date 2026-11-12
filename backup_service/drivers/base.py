@@ -39,6 +39,22 @@ class SourceDriver(ABC):
         """Fetch or copy the source file into local staging."""
         pass
 
+    def fetch_files_batch(
+        self,
+        tasks: List[tuple],
+        max_workers: int = 8,
+        progress_callback: Optional[object] = None
+    ) -> List[tuple]:
+        """Fetch multiple files in batch. Defaults to sequential fetch_file if not overridden."""
+        results = []
+        for file_info, local_dest in tasks:
+            try:
+                self.fetch_file(file_info, local_dest)
+                results.append((file_info, local_dest, None))
+            except Exception as exc:
+                results.append((file_info, local_dest, exc))
+        return results
+
     @abstractmethod
     def dump_database(
         self,

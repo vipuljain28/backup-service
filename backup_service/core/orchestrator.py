@@ -156,6 +156,7 @@ class BackupOrchestrator:
                 logger.info("Scanning source '%s' at: %s", source.id, source.path)
                 active_files = self.catalog.get_active_files(client.client_id, source.id)
                 seen_rel_paths = set()
+                pending_fetch_tasks = []
 
                 for file_info in driver.scan_source_files(source.id, source.path, source.exclude_patterns):
                     rel_p = file_info.rel_path
@@ -176,27 +177,7 @@ class BackupOrchestrator:
                                 size=file_info.size
                             ))
                         else:
-                            driver.fetch_file(file_info, staged_inc_file)
-                            # Copy to master staging as well
-                            staged_master_file.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(str(staged_inc_file), str(staged_master_file))
-
-                            file_hash = calculate_sha256(staged_inc_file)
-                            pending_catalog_updates.append({
-                                "client_id": client.client_id,
-                                "source_id": source.id,
-                                "rel_path": rel_p,
-                                "size": file_info.size,
-                                "mtime": file_info.mtime,
-                                "sha256": file_hash
-                            })
-                            manifest.changes.append(FileChangeItem(
-                                source_id=source.id,
-                                rel_path=rel_p,
-                                action="ADDED",
-                                size=file_info.size,
-                                sha256=file_hash
-                            ))
+                            pending_fetch_tasks.append((file_info, staged_inc_file, staged_master_file, "ADDED", None))
 
                     else:
                         # Case B: Existing File - Check for modification
@@ -213,42 +194,80 @@ class BackupOrchestrator:
                                     old_size=existing_entry.size
                                 ))
                             else:
-                                driver.fetch_file(file_info, staged_inc_file)
-                                file_hash = calculate_sha256(staged_inc_file)
+                                pending_fetch_tasks.append((file_info, staged_inc_file, staged_master_file, "UPDATED", existing_entry))
 
-                                if file_hash != existing_entry.sha256:
-                                    # Definite content change (UPDATED)
-                                    staged_master_file.parent.mkdir(parents=True, exist_ok=True)
-                                    shutil.copy2(str(staged_inc_file), str(staged_master_file))
+                # Parallel file downloads via ThreadPoolExecutor workers
+                if not dry_run and pending_fetch_tasks:
+                    logger.info(
+                        "Parallel downloading %d file(s) for source '%s' across 8 concurrent workers...",
+                        len(pending_fetch_tasks), source.id
+                    )
 
-                                    pending_catalog_updates.append({
-                                        "client_id": client.client_id,
-                                        "source_id": source.id,
-                                        "rel_path": rel_p,
-                                        "size": file_info.size,
-                                        "mtime": file_info.mtime,
-                                        "sha256": file_hash
-                                    })
-                                    manifest.changes.append(FileChangeItem(
-                                        source_id=source.id,
-                                        rel_path=rel_p,
-                                        action="UPDATED",
-                                        size=file_info.size,
-                                        old_size=existing_entry.size,
-                                        sha256=file_hash
-                                    ))
-                                else:
-                                    # Content identical, only metadata changed
-                                    if staged_inc_file.exists():
-                                        staged_inc_file.unlink()
-                                    pending_catalog_updates.append({
-                                        "client_id": client.client_id,
-                                        "source_id": source.id,
-                                        "rel_path": rel_p,
-                                        "size": file_info.size,
-                                        "mtime": file_info.mtime,
-                                        "sha256": file_hash
-                                    })
+                    def _progress_cb(done, total, last_file):
+                        logger.info("Download Progress: %d/%d files completed (latest: %s)", done, total, last_file)
+
+                    download_batches = [(item[0], item[1]) for item in pending_fetch_tasks]
+                    driver.fetch_files_batch(download_batches, max_workers=8, progress_callback=_progress_cb)
+
+                    # Ingest and hash fetched files
+                    for file_info, staged_inc_file, staged_master_file, action, existing_entry in pending_fetch_tasks:
+                        if not staged_inc_file.exists():
+                            logger.warning("File expected at %s but not found after fetch", staged_inc_file)
+                            continue
+
+                        file_hash = calculate_sha256(staged_inc_file)
+
+                        if action == "ADDED":
+                            staged_master_file.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(str(staged_inc_file), str(staged_master_file))
+
+                            pending_catalog_updates.append({
+                                "client_id": client.client_id,
+                                "source_id": source.id,
+                                "rel_path": file_info.rel_path,
+                                "size": file_info.size,
+                                "mtime": file_info.mtime,
+                                "sha256": file_hash
+                            })
+                            manifest.changes.append(FileChangeItem(
+                                source_id=source.id,
+                                rel_path=file_info.rel_path,
+                                action="ADDED",
+                                size=file_info.size,
+                                sha256=file_hash
+                            ))
+                        elif action == "UPDATED":
+                            if file_hash != existing_entry.sha256:
+                                staged_master_file.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(str(staged_inc_file), str(staged_master_file))
+
+                                pending_catalog_updates.append({
+                                    "client_id": client.client_id,
+                                    "source_id": source.id,
+                                    "rel_path": file_info.rel_path,
+                                    "size": file_info.size,
+                                    "mtime": file_info.mtime,
+                                    "sha256": file_hash
+                                })
+                                manifest.changes.append(FileChangeItem(
+                                    source_id=source.id,
+                                    rel_path=file_info.rel_path,
+                                    action="UPDATED",
+                                    size=file_info.size,
+                                    old_size=existing_entry.size,
+                                    sha256=file_hash
+                                ))
+                            else:
+                                if staged_inc_file.exists():
+                                    staged_inc_file.unlink()
+                                pending_catalog_updates.append({
+                                    "client_id": client.client_id,
+                                    "source_id": source.id,
+                                    "rel_path": file_info.rel_path,
+                                    "size": file_info.size,
+                                    "mtime": file_info.mtime,
+                                    "sha256": file_hash
+                                })
 
                 # Case C: Check for files deleted from source
                 # NON-DESTRUCTIVE: Never deleted from master!

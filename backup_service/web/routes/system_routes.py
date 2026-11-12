@@ -102,3 +102,23 @@ async def trigger_update_api(request: Request, user: dict = Depends(require_admi
         details=result
     )
     return result
+
+
+@router.get("/branding")
+@router.get("/about")
+async def branding_page(request: Request):
+    """Public Google OAuth Branding & Disclosure Page for Google Cloud Console Verification."""
+    templates = request.app.state.templates
+    return templates.TemplateResponse(request=request, name="branding.html", context={})
+
+
+@router.get("/privacy")
+async def privacy_page():
+    """Public Privacy Policy redirect for Google OAuth verification."""
+    return RedirectResponse(url="/branding#privacy", status_code=303)
+
+
+@router.get("/terms")
+async def terms_page():
+    """Public Terms of Service redirect for Google OAuth verification."""
+    return RedirectResponse(url="/branding#terms", status_code=303)

@@ -99,6 +99,14 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.state.templates = Jinja2Templates(directory=str(templates_dir))
 
+    from fastapi.responses import FileResponse
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon_route():
+        fav_path = static_dir / "favicon.ico"
+        if fav_path.is_file():
+            return FileResponse(fav_path)
+        return Response(status_code=404)
+
     # Register Routers
     app.include_router(auth_routes.router)
     app.include_router(client_routes.router)

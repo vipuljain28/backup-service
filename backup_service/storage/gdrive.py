@@ -24,6 +24,24 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 CHUNK_SIZE = 5 * 1024 * 1024  # 5 MB resumable chunks
 
 
+def _resolve_file_path(path_str: Optional[str]) -> Optional[Path]:
+    """Resolve file path checking direct path, keys/ subfolder, and project root."""
+    if not path_str:
+        return None
+    p = Path(path_str)
+    if p.is_file():
+        return p.resolve()
+    # Check in keys/ folder
+    in_keys = Path("keys") / p.name
+    if in_keys.is_file():
+        return in_keys.resolve()
+    # Check in root folder
+    in_cur = Path(".") / p.name
+    if in_cur.is_file():
+        return in_cur.resolve()
+    return p.resolve()
+
+
 class GoogleDriveProvider(StorageProvider):
     """Google Drive API v3 Storage Backend."""
 
@@ -34,11 +52,32 @@ class GoogleDriveProvider(StorageProvider):
         self._root_id: Optional[str] = config.root_folder_id
 
     def _get_service(self):
-        """Lazy-initialize and cache Google Drive API client."""
+        """Lazy-initialize and cache Google Drive API client with auto-detection."""
         if self._service is not None:
             return self._service
 
         from googleapiclient.discovery import build
+        import json
+
+        # Auto-detect JSON key file type if the file is present
+        target_path = None
+        if self.config.auth_mode == "service_account" and self.config.service_account_file:
+            target_path = _resolve_file_path(self.config.service_account_file)
+        elif self.config.auth_mode == "oauth_user" and self.config.oauth_client_file:
+            target_path = _resolve_file_path(self.config.oauth_client_file)
+
+        if target_path and target_path.is_file():
+            try:
+                with open(target_path, "r", encoding="utf-8") as jf:
+                    data = json.load(jf)
+                if data.get("type") == "service_account":
+                    self.config.auth_mode = "service_account"
+                    self.config.service_account_file = str(target_path)
+                elif "installed" in data or "web" in data:
+                    self.config.auth_mode = "oauth_user"
+                    self.config.oauth_client_file = str(target_path)
+            except Exception:
+                pass
 
         if self.config.auth_mode == "service_account":
             from google.oauth2 import service_account
@@ -46,11 +85,11 @@ class GoogleDriveProvider(StorageProvider):
             if not self.config.service_account_file:
                 raise ValueError("service_account_file must be specified when auth_mode is service_account")
 
-            sa_path = Path(self.config.service_account_file).resolve()
-            if not sa_path.is_file():
+            sa_path = _resolve_file_path(self.config.service_account_file)
+            if not sa_path or not sa_path.is_file():
                 raise FileNotFoundError(
-                    f"Google Service Account key file not found: {sa_path}. "
-                    "Download your JSON key from Google Cloud Console -> IAM & Admin -> Service Accounts."
+                    f"Google Service Account key file not found at: {sa_path or self.config.service_account_file}. "
+                    "Please upload your JSON key file in the Web Console or save it to 'keys/service_account.json'."
                 )
 
             creds = service_account.Credentials.from_service_account_file(
@@ -65,18 +104,21 @@ class GoogleDriveProvider(StorageProvider):
             from google.auth.transport.requests import Request
 
             creds = None
-            token_path = Path(self.config.oauth_token_file or "token.json").resolve()
-            client_path = Path(self.config.oauth_client_file or "client_secret.json").resolve()
+            token_path = _resolve_file_path(self.config.oauth_token_file or "token.json")
+            client_path = _resolve_file_path(self.config.oauth_client_file or "client_secret.json")
 
-            if token_path.is_file():
+            if token_path and token_path.is_file():
                 creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
 
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                 else:
-                    if not client_path.is_file():
-                        raise FileNotFoundError(f"OAuth client secret file not found: {client_path}")
+                    if not client_path or not client_path.is_file():
+                        raise FileNotFoundError(
+                            f"OAuth client_secret.json file not found at: {client_path or self.config.oauth_client_file}. "
+                            "Please upload your OAuth Client ID JSON file or save it to 'keys/client_secret.json'."
+                        )
                     flow = InstalledAppFlow.from_client_secrets_file(str(client_path), SCOPES)
                     creds = flow.run_local_server(port=0)
 
@@ -91,17 +133,94 @@ class GoogleDriveProvider(StorageProvider):
 
         return self._service
 
-    def verify_connection(self) -> bool:
-        """Verify API connectivity and root folder access."""
+    def verify_connection_detailed(self) -> Dict[str, Any]:
+        """Perform comprehensive diagnostics of Google Drive API connection."""
+        # 1. Check file existence
+        if self.config.auth_mode == "service_account":
+            sa_path = _resolve_file_path(self.config.service_account_file)
+            if not sa_path or not sa_path.is_file():
+                return {
+                    "connected": False,
+                    "stage": "key_file_missing",
+                    "message": (
+                        f"Google Service Account key file was not found at: '{sa_path or self.config.service_account_file}'. "
+                        "Please place your Google Cloud JSON key in 'keys/service_account.json' or upload it directly in the form."
+                    ),
+                    "suggestion": "Go to Google Cloud Console > IAM & Admin > Service Accounts > Keys > Download JSON, and place it in the keys/ directory."
+                }
+        elif self.config.auth_mode == "oauth_user":
+            client_path = _resolve_file_path(self.config.oauth_client_file or "client_secret.json")
+            token_path = _resolve_file_path(self.config.oauth_token_file or "token.json")
+            if (not token_path or not token_path.is_file()) and (not client_path or not client_path.is_file()):
+                return {
+                    "connected": False,
+                    "stage": "client_secret_missing",
+                    "message": (
+                        f"OAuth client secret JSON was not found at: '{client_path or self.config.oauth_client_file}'. "
+                        "Please place your client_secret.json in 'keys/client_secret.json' or upload it directly in the form."
+                    ),
+                    "suggestion": "Download OAuth Client ID JSON from Google Cloud Console > APIs & Services > Credentials, and save as keys/client_secret.json."
+                }
+
+        # 2. Try initializing service
         try:
             service = self._get_service()
-            about = service.about().get(fields="user,storageQuota").execute()
-            user_info = about.get("user", {}).get("emailAddress", "Unknown")
-            logger.info("Google Drive connection verified for user/SA: %s", user_info)
-            return True
         except Exception as exc:
-            logger.error("Failed to connect to Google Drive: %s", exc)
-            return False
+            return {
+                "connected": False,
+                "stage": "auth_initialization_failed",
+                "message": f"Google Authentication Error: {str(exc)}",
+                "suggestion": "Verify that your JSON file contains valid Google Cloud credentials."
+            }
+
+        # 3. Test API connectivity and get identity
+        try:
+            about = service.about().get(fields="user,storageQuota").execute()
+            user_info = about.get("user", {}).get("emailAddress", "Authenticated Identity")
+        except Exception as exc:
+            err_str = str(exc)
+            if "accessNotConfigured" in err_str or "Google Drive API has not been used" in err_str:
+                return {
+                    "connected": False,
+                    "stage": "api_disabled",
+                    "message": "Google Drive API v3 is NOT enabled in your Google Cloud Project.",
+                    "suggestion": "Go to Google Cloud Console > APIs & Services > Library > search 'Google Drive API' > click 'Enable'."
+                }
+            return {
+                "connected": False,
+                "stage": "api_call_failed",
+                "message": f"Google Drive API call failed: {err_str}",
+                "suggestion": "Check Google Cloud Console credentials and permissions."
+            }
+
+        # 4. Check Root Folder access
+        try:
+            root_id = self._get_or_create_root_folder()
+            return {
+                "connected": True,
+                "stage": "success",
+                "identity": user_info,
+                "root_folder_name": self.config.root_folder_name,
+                "root_folder_id": root_id,
+                "message": f"Successfully connected to Google Drive API as '{user_info}'! Root folder '{self.config.root_folder_name}' is accessible (ID: {root_id})."
+            }
+        except Exception as exc:
+            err_str = str(exc)
+            return {
+                "connected": True,
+                "stage": "folder_sharing_needed",
+                "identity": user_info,
+                "message": (
+                    f"Authentication succeeded as '{user_info}', but folder '{self.config.root_folder_name}' could not be accessed. "
+                    f"Make sure you have created the folder '{self.config.root_folder_name}' in Google Drive and Shared it with '{user_info}' as Editor!"
+                ),
+                "suggestion": f"Open Google Drive in browser, right-click '{self.config.root_folder_name}', click Share, and invite '{user_info}' as Editor."
+            }
+
+    def verify_connection(self) -> bool:
+        """Verify API connectivity and root folder access."""
+        res = self.verify_connection_detailed()
+        return res.get("connected", False)
 
     def _get_or_create_root_folder(self) -> str:
         """Resolve or create the top-level root backup directory in Google Drive."""

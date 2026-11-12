@@ -1,6 +1,7 @@
 """Multi-Cloud Storage Configuration & Testing Routes."""
 
 import json
+from pathlib import Path
 from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse, JSONResponse
 from typing import Optional
@@ -180,3 +181,78 @@ async def test_configured_storage_api(request: Request, config_id: int, user: di
             "connected": False,
             "message": f"Storage verification error: {str(exc)}"
         }
+
+
+@router.post("/api/v1/storage/upload-key")
+async def upload_key_api(request: Request, user: dict = Depends(require_auth)):
+    """Upload or paste a Google Cloud JSON key (Service Account or OAuth Client)."""
+    body = await request.json()
+    json_text = body.get("json_content", "").strip()
+    config_id = body.get("config_id")
+
+    if not json_text:
+        raise HTTPException(status_code=400, detail="No JSON content provided.")
+
+    try:
+        data = json.loads(json_text)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON format: {exc}")
+
+    keys_dir = Path("keys")
+    keys_dir.mkdir(parents=True, exist_ok=True)
+
+    db = request.app.state.db_manager
+    vault = request.app.state.vault
+
+    if data.get("type") == "service_account":
+        target_file = keys_dir / "service_account.json"
+        target_file.write_text(json_text, encoding="utf-8")
+        client_email = data.get("client_email", "Unknown")
+        project_id = data.get("project_id", "Unknown")
+
+        if config_id:
+            cfg = db.get_storage_config(config_id)
+            if cfg and cfg["provider_type"] == "gdrive":
+                creds = json.loads(vault.decrypt(cfg["encrypted_credentials"]))
+                creds["auth_mode"] = "service_account"
+                creds["service_account_file"] = "./keys/service_account.json"
+                enc = vault.encrypt(json.dumps(creds))
+                with db.connection() as conn:
+                    conn.execute("UPDATE storage_configs SET encrypted_credentials = ? WHERE id = ?", (enc, config_id))
+
+        return {
+            "status": "success",
+            "key_type": "service_account",
+            "file_path": "./keys/service_account.json",
+            "client_email": client_email,
+            "project_id": project_id,
+            "message": f"Service Account key saved successfully! Identity: {client_email}. Remember to share your Google Drive folder with this email as Editor."
+        }
+
+    elif "installed" in data or "web" in data:
+        target_file = keys_dir / "client_secret.json"
+        target_file.write_text(json_text, encoding="utf-8")
+        client_obj = data.get("installed") or data.get("web") or {}
+        client_id = client_obj.get("client_id", "Unknown")
+
+        if config_id:
+            cfg = db.get_storage_config(config_id)
+            if cfg and cfg["provider_type"] == "gdrive":
+                creds = json.loads(vault.decrypt(cfg["encrypted_credentials"]))
+                creds["auth_mode"] = "oauth_user"
+                creds["oauth_client_file"] = "./keys/client_secret.json"
+                creds["oauth_token_file"] = "./keys/token.json"
+                enc = vault.encrypt(json.dumps(creds))
+                with db.connection() as conn:
+                    conn.execute("UPDATE storage_configs SET encrypted_credentials = ? WHERE id = ?", (enc, config_id))
+
+        return {
+            "status": "success",
+            "key_type": "oauth_user",
+            "file_path": "./keys/client_secret.json",
+            "client_id": client_id,
+            "message": "OAuth 2.0 Client ID secret saved successfully! Switched mode to OAuth2 Client Flow."
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Unrecognized Google JSON key format. Must be either a Service Account JSON or an OAuth 2.0 Client ID JSON.")
+

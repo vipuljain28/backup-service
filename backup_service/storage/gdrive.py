@@ -416,6 +416,17 @@ class GoogleDriveProvider(StorageProvider):
                 return uploaded_id
 
             except HttpError as err:
+                err_str = str(err)
+                if "storageQuotaExceeded" in err_str or "Service Accounts do not have storage quota" in err_str:
+                    friendly_msg = (
+                        "Google Drive Storage Quota Error: Service Accounts have 0 bytes of storage quota on personal Google Drives. "
+                        "To upload backups to Google Drive, please visit http://localhost:8080/storage and either:\n"
+                        "  1. Switch to 'OAuth2 User' authentication and click 'Authorize' to upload under your personal Google account quota.\n"
+                        "  2. Or, if using Google Workspace, invite the Service Account to a Shared Drive (Team Drive) and configure 'Shared Drive ID'."
+                    )
+                    logger.error(friendly_msg)
+                    raise RuntimeError(friendly_msg) from err
+
                 if err.resp.status in (429, 500, 502, 503, 504) and attempt < max_retries:
                     logger.warning(
                         "Google Drive transient error HTTP %d. Retrying in %ds (Attempt %d/%d)...",

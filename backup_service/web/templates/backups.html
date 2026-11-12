@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Backups & Schedules - Enterprise Backup{% endblock %}
-{% block header_title %}Backup Execution & History{% endblock %}
+{% block header_title %}Backup Execution & Schedules{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
@@ -31,6 +31,100 @@
           <span>Run Backup Now</span>
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- Automated Backup Schedules & Recurring Cron Card -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <div class="flex items-center space-x-2">
+          <h2 class="text-base font-bold text-gray-900">Automated Backup Schedules &amp; Recurring Cron</h2>
+          <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">{{ schedules|length }} Active Configs</span>
+        </div>
+        <p class="text-xs text-gray-500 mt-0.5">
+          Backend background scheduler (APScheduler) triggers full incremental backups automatically. Cron timers evaluate in Server UTC.
+        </p>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <button type="button" onclick="openCreateScheduleModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md text-xs shadow flex items-center space-x-1.5">
+          <span>+ Create Backup Schedule</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Schedules Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm" id="schedules-table">
+        <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase font-medium">
+          <tr>
+            <th class="px-6 py-3 w-16 text-center">Status</th>
+            <th class="px-6 py-3">Schedule Name</th>
+            <th class="px-6 py-3">Client Tenant</th>
+            <th class="px-6 py-3">Recurrence / Cron</th>
+            <th class="px-6 py-3">Next Scheduled Execution</th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 text-gray-700">
+          {% for s in schedules %}
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-6 py-4 text-center">
+              <form action="/schedules/{{ s.id }}/toggle" method="POST" class="inline">
+                <input type="hidden" name="is_enabled" value="{{ 0 if s.is_enabled else 1 }}">
+                <button type="submit" title="Click to {{ 'disable' if s.is_enabled else 'enable' }}" class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none {{ 'bg-green-600' if s.is_enabled else 'bg-gray-300' }}">
+                  <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {{ 'translate-x-4' if s.is_enabled else 'translate-x-0' }}"></span>
+                </button>
+              </form>
+            </td>
+            <td class="px-6 py-4 font-semibold text-gray-900">
+              {{ s.name }}
+            </td>
+            <td class="px-6 py-4 text-gray-700 font-medium">
+              {{ s.client_name or ('Client #' ~ s.client_id) }}
+            </td>
+            <td class="px-6 py-4">
+              <code class="px-2 py-1 bg-gray-100 text-gray-800 rounded font-mono text-xs border border-gray-200 font-bold">
+                {{ s.cron_expression }}
+              </code>
+            </td>
+            <td class="px-6 py-4">
+              {% if s.is_enabled %}
+              <div class="flex items-center space-x-1.5 font-mono text-xs text-blue-700 font-semibold">
+                <span class="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span class="schedule-next-time">{{ s.next_run_formatted }}</span>
+              </div>
+              <div class="text-[11px] text-gray-500 font-mono schedule-local-helper" data-utc="{{ s.next_run_formatted }}"></div>
+              {% else %}
+              <span class="text-xs text-gray-400 italic">Paused / Disabled</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-right space-x-1 whitespace-nowrap">
+              <form action="/schedules/{{ s.id }}/run-now" method="POST" class="inline" onsubmit="return confirm('Run backup job immediately for \'{{ s.name }}\'?');">
+                <button type="submit" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded border border-blue-200">
+                  ▶ Run Now
+                </button>
+              </form>
+              <form action="/schedules/{{ s.id }}/delete" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to permanently delete schedule \'{{ s.name }}\'?');">
+                <button type="submit" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded border border-red-200">
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-6 py-8 text-center text-gray-400">
+              <div class="space-y-1">
+                <div class="font-medium text-gray-600">No automated backup schedules configured.</div>
+                <div class="text-xs">Click <button onclick="openCreateScheduleModal()" class="text-blue-600 underline font-semibold">+ Create Backup Schedule</button> to automate daily or weekly snapshots.</div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -131,6 +225,125 @@
     </div>
   </div>
 
+</div>
+
+<!-- Create Schedule Modal -->
+<div id="modal-create-schedule" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+      <div>
+        <h3 class="text-base font-bold text-gray-900">Create Automated Backup Schedule</h3>
+        <p class="text-xs text-gray-500">Configure recurring cron execution for client backups</p>
+      </div>
+      <button onclick="closeCreateScheduleModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- Live Timezone Context Alert -->
+    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs space-y-1">
+      <div class="font-bold text-blue-900 flex items-center justify-between">
+        <span>⏰ Timezone Synchronization</span>
+        <span class="font-mono text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold">Server UTC Mode</span>
+      </div>
+      <div class="text-blue-800">
+        Server Scheduler Clock (UTC): <span class="font-mono font-bold" id="modal-utc-clock">--:--:-- UTC</span>
+      </div>
+      <div class="text-gray-600 text-[11px]">
+        Your Local Workstation Time: <span class="font-mono font-bold text-gray-800" id="modal-local-clock">--:--:--</span>
+      </div>
+    </div>
+
+    <form action="/schedules/add" method="POST" class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Target Client Tenant *</label>
+        <select name="client_id" required class="w-full border rounded-md px-3 py-2 text-sm bg-white">
+          <option value="" disabled selected>-- Select Client Tenant --</option>
+          {% for c in clients %}
+          <option value="{{ c.id }}">{{ c.display_name }} ({{ c.client_id }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Schedule Name *</label>
+        <input type="text" name="name" required placeholder="e.g. Nightly Production Backup" class="w-full border rounded-md px-3 py-2 text-sm" value="Nightly Production Backup">
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Recurrence Frequency *</label>
+        <select name="schedule_type" id="schedule-type-select" onchange="handleScheduleTypeChange()" class="w-full border rounded-md px-3 py-2 text-sm bg-white font-medium">
+          <option value="daily" selected>Daily (Once per day)</option>
+          <option value="twice_daily">Twice Daily (Every 12 Hours)</option>
+          <option value="hourly">Interval Hourly (Every N Hours)</option>
+          <option value="weekly">Weekly (Once per week)</option>
+          <option value="custom">Custom 5-field Cron Expression</option>
+        </select>
+      </div>
+
+      <!-- Option 1: Daily Time Picker -->
+      <div id="cfg-daily" class="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+        <label class="block text-xs font-bold text-gray-700">Execution Time (UTC):</label>
+        <div class="flex items-center space-x-3">
+          <input type="time" name="daily_time" id="input-daily-time" value="02:00" onchange="updateTimezoneHelper()" class="border rounded px-3 py-1.5 text-sm font-mono bg-white">
+          <span class="text-xs text-gray-500 font-mono">UTC</span>
+        </div>
+        <p class="text-[11px] text-gray-600" id="daily-local-conversion-text">
+          Equivalent to: <span class="font-semibold text-blue-700 font-mono" id="daily-local-conversion-val">--:-- in your local time</span>
+        </p>
+      </div>
+
+      <!-- Option 2: Hourly Interval Picker -->
+      <div id="cfg-hourly" class="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2 hidden">
+        <label class="block text-xs font-bold text-gray-700">Run Every N Hours:</label>
+        <select name="hourly_interval" class="border rounded px-3 py-1.5 text-sm bg-white">
+          <option value="1">Every 1 hour</option>
+          <option value="2">Every 2 hours</option>
+          <option value="3">Every 3 hours</option>
+          <option value="4" selected>Every 4 hours</option>
+          <option value="6">Every 6 hours</option>
+          <option value="8">Every 8 hours</option>
+          <option value="12">Every 12 hours</option>
+        </select>
+      </div>
+
+      <!-- Option 3: Weekly Day & Time -->
+      <div id="cfg-weekly" class="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2 hidden">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Day of Week:</label>
+            <select name="weekly_day" class="border rounded px-3 py-1.5 text-sm bg-white w-full">
+              <option value="0" selected>Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Time (UTC):</label>
+            <input type="time" name="weekly_time" value="03:00" class="border rounded px-3 py-1.5 text-sm font-mono bg-white w-full">
+          </div>
+        </div>
+      </div>
+
+      <!-- Option 4: Custom Cron Expression -->
+      <div id="cfg-custom" class="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2 hidden">
+        <label class="block text-xs font-bold text-gray-700">Custom 5-Field Cron (minute hour day month day_of_week):</label>
+        <input type="text" name="custom_cron" placeholder="0 2 * * *" class="w-full border rounded px-3 py-1.5 font-mono text-sm bg-white">
+        <p class="text-[11px] text-gray-500">Standard UNIX cron syntax running in UTC. Example: <code>30 23 * * 1-5</code> (11:30 PM UTC Mon-Fri).</p>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-3 border-t">
+        <button type="button" onclick="closeCreateScheduleModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-xs font-semibold border">
+          Cancel
+        </button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow">
+          Save &amp; Enable Schedule
+        </button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Live Backup Execution Monitor Modal -->
@@ -261,6 +474,94 @@
 let currentActiveJobId = null;
 let pollInterval = null;
 
+// --- Schedule Modal Logic ---
+function openCreateScheduleModal() {
+  document.getElementById('modal-create-schedule').classList.remove('hidden');
+  updateModalClocks();
+  updateTimezoneHelper();
+}
+
+function closeCreateScheduleModal() {
+  document.getElementById('modal-create-schedule').classList.add('hidden');
+}
+
+function handleScheduleTypeChange() {
+  const type = document.getElementById('schedule-type-select').value;
+  document.getElementById('cfg-daily').classList.add('hidden');
+  document.getElementById('cfg-hourly').classList.add('hidden');
+  document.getElementById('cfg-weekly').classList.add('hidden');
+  document.getElementById('cfg-custom').classList.add('hidden');
+
+  if (type === 'daily' || type === 'twice_daily') {
+    document.getElementById('cfg-daily').classList.remove('hidden');
+    updateTimezoneHelper();
+  } else if (type === 'hourly') {
+    document.getElementById('cfg-hourly').classList.remove('hidden');
+  } else if (type === 'weekly') {
+    document.getElementById('cfg-weekly').classList.remove('hidden');
+  } else if (type === 'custom') {
+    document.getElementById('cfg-custom').classList.remove('hidden');
+  }
+}
+
+function updateModalClocks() {
+  const now = new Date();
+  const utcStr = now.toUTCString().replace("GMT", "UTC");
+  const localStr = now.toLocaleString();
+  const modalUtc = document.getElementById('modal-utc-clock');
+  const modalLocal = document.getElementById('modal-local-clock');
+  if (modalUtc) modalUtc.innerText = utcStr;
+  if (modalLocal) modalLocal.innerText = localStr;
+}
+
+function updateTimezoneHelper() {
+  const timeInput = document.getElementById('input-daily-time');
+  if (!timeInput) return;
+  const [h, m] = timeInput.value.split(':').map(Number);
+  
+  // Construct a UTC date today at that hour/min
+  const now = new Date();
+  const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m, 0));
+  
+  const localTimeStr = utcDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  const out = document.getElementById('daily-local-conversion-val');
+  if (out) {
+    out.innerText = `${localTimeStr} (${tzName})`;
+  }
+}
+
+// Convert next_run UTC timestamps into localized representations
+function localizeNextRunTimes() {
+  const helpers = document.querySelectorAll('.schedule-local-helper');
+  helpers.forEach(el => {
+    const rawUtc = el.getAttribute('data-utc');
+    if (!rawUtc || rawUtc.includes('Paused') || rawUtc.includes('Invalid') || rawUtc === 'N/A') {
+      return;
+    }
+    try {
+      // Format: YYYY-MM-DD HH:MM:SS UTC
+      const isoStr = rawUtc.replace(" UTC", "Z").replace(" ", "T");
+      const d = new Date(isoStr);
+      if (!isNaN(d.getTime())) {
+        const localFormatted = d.toLocaleString([], {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+        });
+        el.innerText = `(Local: ${localFormatted})`;
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  localizeNextRunTimes();
+  setInterval(updateModalClocks, 1000);
+});
+
+// --- Backup Execution Polling Logic ---
 async function handleTriggerBackup(event) {
   event.preventDefault();
   const select = document.getElementById('backup-client-select');
@@ -294,7 +595,6 @@ async function handleTriggerBackup(event) {
   setStepStatus('step-dbs', 'pending');
   setStepStatus('step-files', 'pending');
   setStepStatus('step-manifest', 'pending');
-  setStepStatus('step-complete', 'pending');
 
   modal.classList.remove('hidden');
 

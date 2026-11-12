@@ -351,6 +351,70 @@ class DatabaseManager:
             )
             return cur.lastrowid
 
+    def get_database_target(self, db_id: int) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT d.*, s.name AS server_name, s.mode AS server_mode, s.host AS server_host,
+                       s.port AS server_port, s.username AS server_username, s.auth_type AS server_auth_type,
+                       s.encrypted_secret AS server_encrypted_secret
+                FROM database_targets d
+                LEFT JOIN server_connections s ON d.server_id = s.id
+                WHERE d.id = ?
+                """, (db_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def update_database_target(self, db_id: int, client_id: int, server_id: int, name: str, engine: str, host: str, port: int, username: str, encrypted_password: Optional[str], db_name: str, ssl_enabled: bool) -> bool:
+        with self.connection() as conn:
+            if encrypted_password is not None and encrypted_password != "":
+                conn.execute(
+                    """
+                    UPDATE database_targets SET
+                        server_id = ?, name = ?, engine = ?, host = ?, port = ?,
+                        username = ?, encrypted_password = ?, db_name = ?, ssl_enabled = ?
+                    WHERE id = ? AND client_id = ?
+                    """,
+                    (server_id, name, engine, host, port, username, encrypted_password, db_name, int(ssl_enabled), db_id, client_id)
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE database_targets SET
+                        server_id = ?, name = ?, engine = ?, host = ?, port = ?,
+                        username = ?, db_name = ?, ssl_enabled = ?
+                    WHERE id = ? AND client_id = ?
+                    """,
+                    (server_id, name, engine, host, port, username, db_name, int(ssl_enabled), db_id, client_id)
+                )
+            return True
+
+    def get_folder_source(self, folder_id: int) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT f.*, s.name AS server_name, s.mode AS server_mode, s.host AS server_host,
+                       s.port AS server_port, s.username AS server_username, s.auth_type AS server_auth_type,
+                       s.encrypted_secret AS server_encrypted_secret
+                FROM folder_sources f
+                LEFT JOIN server_connections s ON f.server_id = s.id
+                WHERE f.id = ?
+                """, (folder_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def update_folder_source(self, folder_id: int, client_id: int, server_id: int, source_slug: str, absolute_path: str, exclude_patterns: str = "[]") -> bool:
+        with self.connection() as conn:
+            conn.execute(
+                """
+                UPDATE folder_sources SET
+                    server_id = ?, source_slug = ?, absolute_path = ?, exclude_patterns = ?
+                WHERE id = ? AND client_id = ?
+                """,
+                (server_id, source_slug, absolute_path, exclude_patterns, folder_id, client_id)
+            )
+            return True
+
     # --------------------------------------------------------------------------
     # Jobs & Restores API
     # --------------------------------------------------------------------------

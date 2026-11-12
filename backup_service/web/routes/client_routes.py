@@ -325,3 +325,201 @@ async def delete_folder(client_id: int, folder_id: int, request: Request, user: 
         details={"client_id": client_id}
     )
     return RedirectResponse(url="/clients", status_code=303)
+
+
+@router.post("/clients/{client_id}/folders/{folder_id}/edit")
+async def edit_folder(
+    client_id: int,
+    folder_id: int,
+    request: Request,
+    user: dict = Depends(require_auth),
+    server_id: int = Form(...),
+    source_slug: str = Form(...),
+    absolute_path: str = Form(...),
+    exclude_patterns: str = Form("*.tmp, *.log")
+):
+    """Edit an existing folder source configuration."""
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    patterns = [p.strip() for p in exclude_patterns.split(",") if p.strip()]
+
+    db.update_folder_source(
+        folder_id=folder_id,
+        client_id=client_id,
+        server_id=server_id,
+        source_slug=source_slug.strip().lower().replace(" ", "_"),
+        absolute_path=absolute_path.strip(),
+        exclude_patterns=json.dumps(patterns)
+    )
+
+    request.app.state.audit_logger.log(
+        action="EDIT_FOLDER",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="folder_source",
+        resource_id=str(folder_id),
+        details={"client_id": client_id, "path": absolute_path}
+    )
+    return RedirectResponse(url="/clients", status_code=303)
+
+
+@router.post("/clients/{client_id}/databases/{db_id}/edit")
+async def edit_database(
+    client_id: int,
+    db_id: int,
+    request: Request,
+    user: dict = Depends(require_auth),
+    server_id: int = Form(...),
+    name: str = Form(...),
+    engine: str = Form(...),
+    host: str = Form(...),
+    port: int = Form(3306),
+    username: str = Form(...),
+    password: Optional[str] = Form(None),
+    db_name: str = Form(...),
+    ssl_enabled: bool = Form(False)
+):
+    """Edit an existing database target configuration."""
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    vault = request.app.state.vault
+
+    encrypted_password = vault.encrypt(password) if password else None
+
+    db.update_database_target(
+        db_id=db_id,
+        client_id=client_id,
+        server_id=server_id,
+        name=name.strip(),
+        engine=engine.strip().lower(),
+        host=host.strip(),
+        port=port,
+        username=username.strip(),
+        encrypted_password=encrypted_password,
+        db_name=db_name.strip(),
+        ssl_enabled=ssl_enabled
+    )
+
+    request.app.state.audit_logger.log(
+        action="EDIT_DATABASE",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="database_target",
+        resource_id=str(db_id),
+        details={"client_id": client_id, "engine": engine, "db": db_name}
+    )
+    return RedirectResponse(url="/clients", status_code=303)
+
+
+@router.get("/api/v1/folders/{folder_id}/inspect")
+async def inspect_folder_api(folder_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Inspect files, extensions, and metadata inside a configured folder source."""
+    from backup_service.drivers.explorer import DirectoryExplorer
+
+    db = request.app.state.db_manager
+    vault = request.app.state.vault
+
+    folder = db.get_folder_source(folder_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder source not found")
+
+    server_data = {
+        "id": folder.get("server_id"),
+        "name": folder.get("server_name"),
+        "mode": folder.get("server_mode", "local"),
+        "host": folder.get("server_host"),
+        "port": folder.get("server_port") or 22,
+        "username": folder.get("server_username"),
+        "auth_type": folder.get("server_auth_type"),
+        "encrypted_secret": folder.get("server_encrypted_secret")
+    }
+
+    inspection = DirectoryExplorer.inspect_folder(
+        server=server_data,
+        vault=vault,
+        folder_path=folder["absolute_path"]
+    )
+    inspection["folder_id"] = folder_id
+    inspection["source_slug"] = folder["source_slug"]
+    inspection["exclude_patterns"] = json.loads(folder.get("exclude_patterns") or "[]")
+    return inspection
+
+
+@router.post("/api/v1/databases/{db_id}/test")
+async def test_configured_database_api(db_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Test connection directly on the configured database target (SSH remote or local)."""
+    from backup_service.config.settings import SSHConfig
+    from backup_service.drivers.ssh_driver import SSHDriver
+    from backup_service.drivers.db_checker import DatabaseChecker
+
+    db = request.app.state.db_manager
+    vault = request.app.state.vault
+
+    target = db.get_database_target(db_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Database target not found")
+
+    decrypted_pwd = vault.decrypt(target["encrypted_password"]) if target.get("encrypted_password") else ""
+    server_mode = target.get("server_mode", "local")
+
+    if server_mode == "ssh":
+        server_secret = vault.decrypt(target["server_encrypted_secret"]) if target.get("server_encrypted_secret") else None
+        key_path = server_secret if target.get("server_auth_type") != "password" else None
+        server_pwd = server_secret if target.get("server_auth_type") == "password" else None
+
+        ssh_cfg = SSHConfig(
+            host=target["server_host"],
+            port=target.get("server_port") or 22,
+            user=target["server_username"],
+            key_path=key_path,
+            password=server_pwd,
+            timeout_seconds=10
+        )
+        try:
+            driver = SSHDriver(ssh_cfg)
+            client = driver._get_client()
+
+            pwd_flag = f"-p'{decrypted_pwd}'" if decrypted_pwd else ""
+            db_name = target["db_name"]
+            # Check connection and query table count
+            cmd = f"mysql -h {target['host']} -P {target['port']} -u {target['username']} {pwd_flag} {db_name} -e 'SELECT count(*) FROM information_schema.tables WHERE table_schema=\"{db_name}\";' 2>&1"
+            stdin, stdout, stderr = client.exec_command(cmd, timeout=10)
+            output = stdout.read().decode("utf-8", errors="ignore").strip()
+            driver.close()
+
+            if "ERROR " in output or "Access denied" in output:
+                return {
+                    "success": False,
+                    "message": f"Remote Database Connection Failed:\n{output}"
+                }
+            
+            lines = [l.strip() for l in output.splitlines() if l.strip()]
+            table_count = lines[-1] if len(lines) > 1 else "0"
+            return {
+                "success": True,
+                "message": f"Connected successfully over SSH to MySQL on '{target['server_host']}'!\nFound {table_count} tables in database '{db_name}'."
+            }
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": f"SSH Database connection error: {str(exc)}"
+            }
+    else:
+        # Local connection
+        result = DatabaseChecker.test_connection(
+            engine=target["engine"],
+            host=target["host"],
+            port=target["port"],
+            user=target["username"],
+            password=decrypted_pwd,
+            db_name=target["db_name"],
+            ssl_enabled=bool(target.get("ssl_enabled"))
+        )
+        return {
+            "success": result["connected"],
+            "message": result["message"] or ("Connected successfully to local database!" if result["connected"] else "Connection failed.")
+        }

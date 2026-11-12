@@ -1,6 +1,7 @@
 """Disaster Recovery & Point-in-Time Restore Routes."""
 
 import json
+import shlex
 from fastapi import APIRouter, Request, Depends, HTTPException, Form, BackgroundTasks
 from fastapi.responses import RedirectResponse, JSONResponse
 from typing import Optional
@@ -371,9 +372,9 @@ async def test_restore_database_api(
             )
             drv = SSHDriver(ssh_cfg)
             cl = drv._get_client()
-            pwd_flag = f"-p'{password}'" if password else ""
-            db_flag = db_name if db_name else ""
-            cmd = f"mysql -h {host} -P {port} -u {username} {pwd_flag} {db_flag} -e 'SELECT 1;' 2>&1"
+            pwd_flag = f"--password={shlex.quote(password)}" if password else ""
+            db_flag = shlex.quote(db_name) if db_name else ""
+            cmd = f"mysql -h {shlex.quote(str(host))} -P {port} -u {shlex.quote(username)} {pwd_flag} {db_flag} -e 'SELECT 1;' 2>&1"
             stdin, stdout, stderr = cl.exec_command(cmd, timeout=8)
             out = stdout.read().decode("utf-8", errors="ignore").strip()
             drv.close()

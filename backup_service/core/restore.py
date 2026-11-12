@@ -2,6 +2,7 @@
 
 import os
 import gzip
+import shlex
 import shutil
 import logging
 import subprocess
@@ -82,7 +83,7 @@ class RestorationEngine:
                     elif target_mode == "ssh" and target_ssh_config:
                         ssh_drv = SSHDriver(target_ssh_config)
                         client = ssh_drv._get_client()
-                        client.exec_command(f"mkdir -p '{target_file_directory}'")
+                        client.exec_command(f"mkdir -p {shlex.quote(str(target_file_directory))}")
                         ssh_drv.close()
                         _log(f"[OK] Remote target directory prepared over SSH: {target_file_directory}")
 
@@ -125,11 +126,12 @@ class RestorationEngine:
                         client = ssh_drv._get_client()
                         _log(f"[+] Connected to remote database host over SSH: {target_ssh_config.host}:{target_ssh_config.port}")
                         if target_database_engine in ("mysql", "mariadb"):
-                            pass_flag = f"-p'{target_database_password}'" if target_database_password else ""
-                            db_host_flag = f"-h {target_database_host or '127.0.0.1'}"
+                            pass_flag = f"--password={shlex.quote(target_database_password)}" if target_database_password else ""
+                            db_host_flag = f"-h {shlex.quote(str(target_database_host or '127.0.0.1'))}"
                             db_port_flag = f"-P {target_database_port or 3306}"
-                            db_user_flag = f"-u {target_database_user or 'root'}"
-                            create_cmd = f"mysql {db_host_flag} {db_port_flag} {db_user_flag} {pass_flag} -e 'CREATE DATABASE IF NOT EXISTS \\`{target_database_name}\\`;' 2>&1"
+                            db_user_flag = f"-u {shlex.quote(target_database_user or 'root')}"
+                            safe_db_name = target_database_name.replace("`", "")
+                            create_cmd = f"mysql {db_host_flag} {db_port_flag} {db_user_flag} {pass_flag} -e 'CREATE DATABASE IF NOT EXISTS \\`{safe_db_name}\\`;' 2>&1"
                             stdin, stdout, stderr = client.exec_command(create_cmd)
                             exit_code = stdout.channel.recv_exit_status()
                             out = stdout.read().decode("utf-8", errors="ignore").strip()

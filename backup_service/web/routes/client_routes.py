@@ -1,6 +1,7 @@
 """Client Tenants, Servers, Databases & Folders Management Routes."""
 
 import json
+import shlex
 from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse, JSONResponse
 from typing import Optional, List
@@ -510,10 +511,13 @@ async def test_configured_database_api(db_id: int, request: Request, user: dict 
             driver = SSHDriver(ssh_cfg)
             client = driver._get_client()
 
-            pwd_flag = f"-p'{decrypted_pwd}'" if decrypted_pwd else ""
+            pwd_flag = f"--password={shlex.quote(decrypted_pwd)}" if decrypted_pwd else ""
             db_name = target["db_name"]
-            # Check connection and query table count
-            cmd = f"mysql -h {target['host']} -P {target['port']} -u {target['username']} {pwd_flag} {db_name} -e 'SELECT count(*) FROM information_schema.tables WHERE table_schema=\"{db_name}\";' 2>&1"
+            # Check connection and query table count with strict shell parameter escaping
+            cmd = (
+                f"mysql -h {shlex.quote(str(target['host']))} -P {target['port']} -u {shlex.quote(target['username'])} "
+                f"{pwd_flag} {shlex.quote(db_name)} -e {shlex.quote(f'SELECT count(*) FROM information_schema.tables WHERE table_schema=\"{db_name}\";')} 2>&1"
+            )
             stdin, stdout, stderr = client.exec_command(cmd, timeout=10)
             output = stdout.read().decode("utf-8", errors="ignore").strip()
             driver.close()

@@ -256,3 +256,50 @@ async def upload_key_api(request: Request, user: dict = Depends(require_auth)):
     else:
         raise HTTPException(status_code=400, detail="Unrecognized Google JSON key format. Must be either a Service Account JSON or an OAuth 2.0 Client ID JSON.")
 
+
+@router.get("/storage/gdrive/authorize")
+async def gdrive_authorize(request: Request, user: dict = Depends(require_auth)):
+    """Initiate interactive Google OAuth2 consent screen redirect."""
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    SCOPES = ["https://www.googleapis.com/auth/drive"]
+
+    client_path = Path("keys/client_secret.json")
+    if not client_path.is_file():
+        raise HTTPException(status_code=400, detail="OAuth client_secret.json not found in keys/ directory.")
+
+    flow = InstalledAppFlow.from_client_secrets_file(
+        str(client_path), SCOPES, redirect_uri="http://localhost:8080/storage/gdrive/callback"
+    )
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+    return RedirectResponse(auth_url, status_code=303)
+
+
+@router.get("/storage/gdrive/callback")
+async def gdrive_callback(request: Request, code: Optional[str] = None, error: Optional[str] = None):
+    """Handle Google OAuth2 redirect callback and persist token.json."""
+    if error:
+        raise HTTPException(status_code=400, detail=f"Google OAuth authorization denied: {error}")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing authorization code from Google.")
+
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    SCOPES = ["https://www.googleapis.com/auth/drive"]
+
+    client_path = Path("keys/client_secret.json")
+    if not client_path.is_file():
+        raise HTTPException(status_code=400, detail="OAuth client_secret.json not found in keys/ directory.")
+
+    flow = InstalledAppFlow.from_client_secrets_file(
+        str(client_path), SCOPES, redirect_uri="http://localhost:8080/storage/gdrive/callback"
+    )
+    flow.fetch_token(code=code)
+    creds = flow.credentials
+
+    keys_dir = Path("keys")
+    keys_dir.mkdir(parents=True, exist_ok=True)
+    token_path = keys_dir / "token.json"
+    token_path.write_text(creds.to_json(), encoding="utf-8")
+
+    return RedirectResponse(url="/storage?oauth_status=authorized", status_code=303)
+
+

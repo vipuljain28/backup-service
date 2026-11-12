@@ -119,12 +119,12 @@ class GoogleDriveProvider(StorageProvider):
                             f"OAuth client_secret.json file not found at: {client_path or self.config.oauth_client_file}. "
                             "Please upload your OAuth Client ID JSON file or save it to 'keys/client_secret.json'."
                         )
-                    flow = InstalledAppFlow.from_client_secrets_file(str(client_path), SCOPES)
-                    creds = flow.run_local_server(port=0)
-
-                # Save updated credentials
-                token_path.parent.mkdir(parents=True, exist_ok=True)
-                token_path.write_text(creds.to_json(), encoding="utf-8")
+                    # Do not block the web server with run_local_server. Require web OAuth callback or token file.
+                    raise PermissionError(
+                        "Google OAuth2 User authorization has not been completed yet. "
+                        "Please click 'Authorize with Google' in the Storage console to complete web authorization, "
+                        "or switch to Google Service Account mode (Recommended for automated backups)."
+                    )
 
             self._service = build("drive", "v3", credentials=creds, cache_discovery=False)
             logger.info("Authenticated successfully via Google OAuth2 User credentials")
@@ -151,7 +151,7 @@ class GoogleDriveProvider(StorageProvider):
         elif self.config.auth_mode == "oauth_user":
             client_path = _resolve_file_path(self.config.oauth_client_file or "client_secret.json")
             token_path = _resolve_file_path(self.config.oauth_token_file or "token.json")
-            if (not token_path or not token_path.is_file()) and (not client_path or not client_path.is_file()):
+            if not client_path or not client_path.is_file():
                 return {
                     "connected": False,
                     "stage": "client_secret_missing",
@@ -161,6 +161,26 @@ class GoogleDriveProvider(StorageProvider):
                     ),
                     "suggestion": "Download OAuth Client ID JSON from Google Cloud Console > APIs & Services > Credentials, and save as keys/client_secret.json."
                 }
+            if not token_path or not token_path.is_file():
+                try:
+                    from google_auth_oauthlib.flow import InstalledAppFlow
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(client_path), SCOPES, redirect_uri="http://localhost:8080/storage/gdrive/callback"
+                    )
+                    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+                    return {
+                        "connected": False,
+                        "stage": "oauth_action_required",
+                        "auth_url": auth_url,
+                        "message": "OAuth Client ID JSON is valid, but your Google Account has not been authorized yet.",
+                        "suggestion": "Click the 'Authorize with Google' button below to sign in and grant access."
+                    }
+                except Exception as exc:
+                    return {
+                        "connected": False,
+                        "stage": "flow_error",
+                        "message": f"OAuth flow initialization error: {exc}"
+                    }
 
         # 2. Try initializing service
         try:

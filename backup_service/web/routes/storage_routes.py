@@ -38,7 +38,9 @@ async def create_storage(
     # Google Drive fields
     gdrive_auth_mode: str = Form("service_account"),
     gdrive_sa_file: Optional[str] = Form(None),
-    gdrive_root_folder: Optional[str] = Form("Enterprise_Backups"),
+    gdrive_oauth_file: Optional[str] = Form(None),
+    gdrive_token_file: Optional[str] = Form("token.json"),
+    gdrive_root_folder: Optional[str] = Form("STAR_Enterprise_Backups"),
     # OneDrive fields
     onedrive_tenant_id: Optional[str] = Form(None),
     onedrive_client_id: Optional[str] = Form(None),
@@ -61,7 +63,9 @@ async def create_storage(
         credentials = {
             "auth_mode": gdrive_auth_mode,
             "service_account_file": gdrive_sa_file,
-            "root_folder_name": gdrive_root_folder or "Enterprise_Backups"
+            "oauth_client_file": gdrive_oauth_file or "./client_secret.json",
+            "oauth_token_file": gdrive_token_file or "./token.json",
+            "root_folder_name": gdrive_root_folder or "STAR_Enterprise_Backups"
         }
     elif p_type == "onedrive":
         credentials = {
@@ -124,4 +128,34 @@ async def test_storage_api(request: Request, body: dict, user: dict = Depends(re
             "provider_type": provider_type,
             "connected": False,
             "message": f"Storage connection error: {exc}"
+        }
+
+
+@router.post("/api/v1/storage/{config_id}/test")
+async def test_configured_storage_api(request: Request, config_id: int, user: dict = Depends(require_auth)):
+    db = request.app.state.db_manager
+    cfg = db.get_storage_config(config_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Storage configuration not found")
+
+    vault = request.app.state.vault
+    p_type = cfg["provider_type"]
+
+    try:
+        creds_json = vault.decrypt(cfg["encrypted_credentials"])
+        credentials = json.loads(creds_json)
+        provider = StorageProviderFactory.create_provider(p_type, credentials)
+        connected = provider.verify_connection()
+        return {
+            "config_id": config_id,
+            "provider_type": p_type,
+            "connected": connected,
+            "message": f"Storage '{cfg['name']}' ({p_type.upper()}) verified successfully!" if connected else f"Storage '{cfg['name']}' connection check failed."
+        }
+    except Exception as exc:
+        return {
+            "config_id": config_id,
+            "provider_type": p_type,
+            "connected": False,
+            "message": f"Storage verification error: {str(exc)}"
         }

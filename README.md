@@ -133,7 +133,38 @@ Default Superadmin Credentials:
 
 ---
 
-## 4. Key Feature Walkthroughs
+## 4. Google Drive API v3 Setup Guide
+
+To use Google Drive as your offsite cloud backup repository:
+
+### Option A: Google Cloud Service Account (Recommended for Unattended Servers & Cron)
+Service Accounts run completely unattended without requiring interactive browser logins or token refreshing:
+1. **Google Cloud Console**: Go to [https://console.cloud.google.com/](https://console.cloud.google.com/) and create a project (e.g., `Enterprise-Backup-System`).
+2. **Enable Drive API**: Navigate to **APIs & Services > Library**, search for **Google Drive API**, and click **Enable**.
+3. **Create Service Account**: Go to **APIs & Services > Credentials > Create Credentials > Service Account**. Enter a name (e.g. `backup-operator`), click **Create and Continue**, then **Done**.
+4. **Generate JSON Key**:
+   - Click the created service account email.
+   - Go to the **Keys** tab > **Add Key** > **Create new key** > Select **JSON** > Download.
+5. **Position Key on Server**:
+   - Save the downloaded file to your server (e.g., `./service_account.json` or `/etc/backup_service/service_account.json`).
+   - Restrict permissions: `chmod 600 /etc/backup_service/service_account.json`.
+6. 🚨 **MANDATORY PERMISSION STEP (Folder Sharing)**:
+   - Copy the service account email (e.g. `backup-operator@your-project.iam.gserviceaccount.com`).
+   - Open your Google Drive in a web browser ([drive.google.com](https://drive.google.com)).
+   - Create a folder named **`STAR_Enterprise_Backups`** (matches the `Root Backup Folder Name`).
+   - Right-click folder > **Share** > paste the Service Account email.
+   - Set permission to **Editor** > uncheck "Notify people" > click **Share**.
+   *(Without this step, Google Drive API will reject uploads with error 404 or 403 because service accounts do not have access to personal Google Drive storage).*
+
+### Option B: OAuth2 Client Flow (Desktop / Interactive User)
+1. In Google Cloud Console, configure **APIs & Services > OAuth consent screen** (type: External, add scope `.../auth/drive`, add your email under Test Users).
+2. Go to **Credentials > Create Credentials > OAuth client ID** (Application type: **Desktop app**).
+3. Download JSON and save as `./client_secret.json`.
+4. On first backup or test, an interactive browser authorization link generates `./token.json`.
+
+---
+
+## 5. Key Feature Walkthroughs
 
 ### A. Interactive Server Directory Browser
 1. In the **Clients & Targets** tab, click **+ Add Folder Source**.

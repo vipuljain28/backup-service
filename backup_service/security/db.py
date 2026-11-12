@@ -132,6 +132,7 @@ class DatabaseManager:
                     duration_seconds REAL DEFAULT 0.0,
                     manifest_json TEXT,
                     error_message TEXT,
+                    is_dry_run INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL
                 );
 
@@ -165,6 +166,12 @@ class DatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(created_at);
                 CREATE INDEX IF NOT EXISTS idx_jobs_client ON backup_jobs(client_id, run_date);
             """)
+
+            # Safe auto-migration for legacy schema instances
+            try:
+                conn.execute("ALTER TABLE backup_jobs ADD COLUMN is_dry_run INTEGER DEFAULT 0")
+            except Exception:
+                pass
 
             # Seed default admin user if no users exist
             cur = conn.execute("SELECT COUNT(*) AS cnt FROM users")
@@ -418,7 +425,23 @@ class DatabaseManager:
     # --------------------------------------------------------------------------
     # Jobs & Restores API
     # --------------------------------------------------------------------------
-    def record_backup_job(self, client_id: int, trigger_type: str, status: str, run_date: str, run_timestamp: str, files_added: int = 0, files_updated: int = 0, files_deleted: int = 0, dbs_dumped: int = 0, total_bytes: int = 0, duration_seconds: float = 0.0, manifest_json: str = "{}", error_message: str = None) -> int:
+    def record_backup_job(
+        self,
+        client_id: int,
+        trigger_type: str,
+        status: str,
+        run_date: str,
+        run_timestamp: str,
+        files_added: int = 0,
+        files_updated: int = 0,
+        files_deleted: int = 0,
+        dbs_dumped: int = 0,
+        total_bytes: int = 0,
+        duration_seconds: float = 0.0,
+        manifest_json: str = "{}",
+        error_message: str = None,
+        is_dry_run: int = 0
+    ) -> int:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with self.connection() as conn:
             cur = conn.execute(
@@ -426,17 +449,31 @@ class DatabaseManager:
                 INSERT INTO backup_jobs (
                     client_id, trigger_type, status, run_date, run_timestamp,
                     files_added, files_updated, files_deleted, dbs_dumped,
-                    total_bytes, duration_seconds, manifest_json, error_message, created_at
+                    total_bytes, duration_seconds, manifest_json, error_message, is_dry_run, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     client_id, trigger_type, status, run_date, run_timestamp,
                     files_added, files_updated, files_deleted, dbs_dumped,
-                    total_bytes, duration_seconds, manifest_json, error_message, now_iso
+                    total_bytes, duration_seconds, manifest_json, error_message, is_dry_run, now_iso
                 )
             )
             return cur.lastrowid
+
+    def get_backup_job(self, job_id: int) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            cur = conn.execute(
+                """
+                SELECT j.*, c.client_id AS client_slug, c.display_name AS client_name
+                FROM backup_jobs j
+                JOIN clients c ON j.client_id = c.id
+                WHERE j.id = ?
+                """,
+                (job_id,)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
 
     def list_backup_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
         with self.connection() as conn:

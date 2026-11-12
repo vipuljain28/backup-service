@@ -22,7 +22,19 @@
           <select name="backup_job_id" required class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold">
             <option value="" disabled selected>-- Choose historical snapshot --</option>
             {% for b in backup_jobs %}
-            <option value="{{ b.id }}">[{{ b.run_date }}] {{ b.client_name }} ({{ b.status|upper }})</option>
+              {% if b.is_dry_run %}
+              <option value="{{ b.id }}" disabled class="text-amber-800 bg-amber-50">
+                [{{ b.run_date }}] {{ b.client_name }} ⚠️ [DRY RUN SIMULATION - No Archives Stored]
+              </option>
+              {% elif b.status == 'success' %}
+              <option value="{{ b.id }}">
+                [{{ b.run_date }}] {{ b.client_name }} (Job #{{ b.id }} - {{ (b.total_bytes / (1024 * 1024))|round(2) }} MB)
+              </option>
+              {% else %}
+              <option value="{{ b.id }}" disabled class="text-gray-400 bg-gray-50">
+                [{{ b.run_date }}] {{ b.client_name }} ({{ b.status|upper }})
+              </option>
+              {% endif %}
             {% endfor %}
           </select>
         </div>

@@ -128,7 +128,8 @@ def _execute_backup_task(app_state, client_id_num: int, trigger_type: str = "man
             trigger_type=trigger_type,
             status="running",
             run_date=now_utc.strftime("%Y-%m-%d"),
-            run_timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S")
+            run_timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S"),
+            is_dry_run=1 if dry_run else 0
         )
 
     try:
@@ -209,7 +210,8 @@ async def trigger_backup(
         trigger_type="manual",
         status="running",
         run_date=now_utc.strftime("%Y-%m-%d"),
-        run_timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S")
+        run_timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S"),
+        is_dry_run=1 if dry_run else 0
     )
 
     background_tasks.add_task(_execute_backup_task, request.app.state, client_id, "manual", dry_run, job_id)
@@ -261,6 +263,7 @@ async def get_job_status(job_id: int, request: Request, user: dict = Depends(req
         "client_name": job.get("client_name"),
         "status": job["status"],
         "trigger_type": job["trigger_type"],
+        "is_dry_run": bool(job.get("is_dry_run", 0)),
         "files_added": job["files_added"] or 0,
         "files_updated": job["files_updated"] or 0,
         "files_deleted": job["files_deleted"] or 0,

@@ -102,6 +102,11 @@ async def trigger_restore(
         job = conn.execute("SELECT * FROM backup_jobs WHERE id = ?", (backup_job_id,)).fetchone()
         if not job:
             raise HTTPException(status_code=404, detail="Backup snapshot not found")
+        if job["is_dry_run"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot restore from a Dry Run snapshot. Dry runs are non-destructive simulations and do not create storage archives."
+            )
         client = conn.execute("SELECT * FROM clients WHERE id = ?", (job["client_id"],)).fetchone()
 
     client_id_slug = client["client_id"]

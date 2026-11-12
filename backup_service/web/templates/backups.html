@@ -67,10 +67,23 @@
           <tr class="hover:bg-gray-50 transition" id="job-row-{{ job.id }}">
             <td class="px-6 py-4 font-semibold text-gray-900">{{ job.client_name }}</td>
             <td class="px-6 py-4 font-mono text-xs">{{ job.run_timestamp }}</td>
-            <td class="px-6 py-4 text-xs font-semibold uppercase text-gray-500">{{ job.trigger_type }}</td>
+            <td class="px-6 py-4 text-xs font-semibold uppercase text-gray-500">
+              {% if job.is_dry_run %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                DRY RUN
+              </span>
+              <span class="text-gray-400 ml-1">({{ job.trigger_type }})</span>
+              {% else %}
+              {{ job.trigger_type }}
+              {% endif %}
+            </td>
             <td class="px-6 py-4">
               {% if job.status == 'success' %}
-              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">SUCCESS</span>
+                {% if job.is_dry_run %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200" title="Dry Run: Differential scan verified without creating disk archives">SIMULATED OK</span>
+                {% else %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">SUCCESS</span>
+                {% endif %}
               {% elif job.status == 'running' %}
               <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 animate-pulse">RUNNING</span>
               {% else %}
@@ -84,7 +97,12 @@
               <span class="text-purple-600 ml-1" title="Databases Dumped">DBs: {{ job.dbs_dumped }}</span>
             </td>
             <td class="px-6 py-4 font-mono text-xs text-gray-600">
+              {% if job.is_dry_run %}
+              <span class="text-amber-700 font-semibold">0.00 MB</span>
+              <div class="text-[10px] text-amber-600 font-medium">(Simulation Only)</div>
+              {% else %}
               {{ (job.total_bytes / (1024 * 1024))|round(2) }} MB
+              {% endif %}
             </td>
             <td class="px-6 py-4 text-xs text-gray-600 font-mono">
               {{ job.duration_seconds|round(2) }}s
@@ -325,11 +343,19 @@ function onJobFinished(job, isSuccess) {
   document.getElementById('live-volume').innerText = `${(job.total_bytes / (1024 * 1024)).toFixed(2)} MB`;
 
   if (isSuccess) {
-    badge.innerText = "SUCCESS";
-    badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800";
-    bar.className = "bg-green-500 h-2.5 rounded-full transition-all duration-300 w-full";
-    document.getElementById('live-final-status').innerText = "COMPLETED";
-    document.getElementById('live-final-status').className = "text-green-600 font-bold";
+    if (job.is_dry_run) {
+      badge.innerText = "SIMULATED OK";
+      badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200";
+      bar.className = "bg-purple-500 h-2.5 rounded-full transition-all duration-300 w-full";
+      document.getElementById('live-final-status').innerText = "DRY RUN SIMULATION COMPLETE";
+      document.getElementById('live-final-status').className = "text-purple-700 font-bold";
+    } else {
+      badge.innerText = "SUCCESS";
+      badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800";
+      bar.className = "bg-green-500 h-2.5 rounded-full transition-all duration-300 w-full";
+      document.getElementById('live-final-status').innerText = "COMPLETED";
+      document.getElementById('live-final-status').className = "text-green-600 font-bold";
+    }
 
     setStepStatus('step-connect', 'done');
     setStepStatus('step-dbs', 'done');

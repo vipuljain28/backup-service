@@ -133,13 +133,17 @@ Default Superadmin Credentials:
 
 ---
 
-## 4. Google Drive API v3 Setup Guide
+## 4. Multi-Cloud Storage Setup & Credential Guide
 
-To use Google Drive as your offsite cloud backup repository:
+Configure offsite cloud repositories or on-premises storage gateways:
 
-### Option A: Google Cloud Service Account (Recommended for Unattended Servers & Cron)
-Service Accounts run completely unattended without requiring interactive browser logins or token refreshing:
-1. **Google Cloud Console**: Go to [https://console.cloud.google.com/](https://console.cloud.google.com/) and create a project (e.g., `Enterprise-Backup-System`).
+---
+
+### A. Google Drive (API v3)
+Used for automated offsite archiving to personal Google Drive or Google Workspace Shared Drives:
+
+#### Option 1: Service Account (Recommended for Unattended Servers & Cron)
+1. **Google Cloud Console**: Go to [https://console.cloud.google.com/](https://console.cloud.google.com/) and create a project (e.g. `Enterprise-Backup-System`).
 2. **Enable Drive API**: Navigate to **APIs & Services > Library**, search for **Google Drive API**, and click **Enable**.
 3. **Create Service Account**: Go to **APIs & Services > Credentials > Create Credentials > Service Account**. Enter a name (e.g. `backup-operator`), click **Create and Continue**, then **Done**.
 4. **Generate JSON Key**:
@@ -156,11 +160,97 @@ Service Accounts run completely unattended without requiring interactive browser
    - Set permission to **Editor** > uncheck "Notify people" > click **Share**.
    *(Without this step, Google Drive API will reject uploads with error 404 or 403 because service accounts do not have access to personal Google Drive storage).*
 
-### Option B: OAuth2 Client Flow (Desktop / Interactive User)
+#### Option 2: OAuth2 Client Flow (Desktop / Interactive User)
 1. In Google Cloud Console, configure **APIs & Services > OAuth consent screen** (type: External, add scope `.../auth/drive`, add your email under Test Users).
 2. Go to **Credentials > Create Credentials > OAuth client ID** (Application type: **Desktop app**).
 3. Download JSON and save as `./client_secret.json`.
 4. On first backup or test, an interactive browser authorization link generates `./token.json`.
+
+---
+
+### B. Microsoft OneDrive & SharePoint (Microsoft Graph API)
+Used for automated replication to Microsoft 365, OneDrive Business, or personal OneDrive accounts:
+1. **Azure Portal App Registration**:
+   - Go to [Azure Portal](https://portal.azure.com/) or [Microsoft Entra admin center](https://entra.microsoft.com/).
+   - Navigate to **Microsoft Entra ID > App registrations > + New registration**.
+   - Name: `StarEnterpriseBackup`. Supported account types: *Accounts in any organizational directory and personal Microsoft accounts* (or Single tenant for enterprise).
+   - Click **Register**.
+2. **Collect Tenant ID and Client ID**:
+   - On the App **Overview** screen, copy:
+     - **Application (client) ID**: (e.g. `4a2b91c0-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+     - **Directory (tenant) ID**: (use `common` for personal accounts or tenant UUID for enterprise)
+3. **Generate Client Secret (Key)**:
+   - In the left sidebar, click **Certificates & secrets > + New client secret**.
+   - Description: `backup-secret-key`, Expiration: `24 months`. Click **Add**.
+   - ⚠️ **CRITICAL**: Immediately copy the string in the **Value** column before leaving the page.
+4. **Grant Graph API Permissions**:
+   - Go to **API permissions > + Add a permission > Microsoft Graph**.
+   - Choose **Application permissions** (for background server service) or **Delegated permissions**.
+   - Add permissions: `Files.ReadWrite.All` and `offline_access`. Click **Add permissions**.
+   - Click **Grant admin consent for [Tenant]**.
+
+---
+
+### C. AWS S3 / S3-Compatible & TeraBox Cloud
+Used for high-throughput object storage across AWS S3, TeraBox S3, Wasabi, Cloudflare R2, and MinIO:
+1. **Create S3 Bucket**:
+   - Go to [AWS S3 Console](https://console.aws.amazon.com/s3/) > **Create bucket**.
+   - Name: `my-enterprise-backups-star` (globally unique). Keep *Block Public Access* enabled and enable SSE-S3 encryption.
+2. **Create IAM User & Access Keys**:
+   - Go to [AWS IAM Console](https://console.aws.amazon.com/iam/) > **Users > Create user**.
+   - Name: `star-backup-operator`.
+   - Permissions: Attach `AmazonS3FullAccess` or granular least-privilege policy (see below).
+   - Under **Security credentials > Access keys > Create access key** (Application outside AWS).
+   - Copy **Access Key ID** (`AKIA...`) and **Secret Access Key**.
+3. **Production Least-Privilege IAM Policy**:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": "arn:aws:s3:::my-enterprise-backups-star"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
+      "Resource": "arn:aws:s3:::my-enterprise-backups-star/*"
+    }
+  ]
+}
+```
+4. **S3 Endpoint URLs**:
+   - Standard AWS S3: Leave empty or `https://s3.amazonaws.com`
+   - TeraBox S3 Gateway: `https://s3.terabox.com`
+   - Wasabi: `https://s3.wasabisys.com`
+   - MinIO (Private Network): `http://192.168.1.100:9000`
+
+---
+
+### D. Local Filesystem & Mounted NAS (NFS / SMB)
+Zero-cloud-cost on-premises storage targeting local NVMe drives, USB arrays, or company NAS appliances:
+1. **Directory Setup & Linux Permissions**:
+```bash
+# Create directory
+sudo mkdir -p /mnt/nas/backups
+
+# Assign ownership to backup daemon user
+sudo chown -R starbackup:starbackup /mnt/nas/backups
+
+# Restrict permissions (owner read/write/exec, group read/exec)
+sudo chmod -R 750 /mnt/nas/backups
+```
+2. **Permanent Mount via `/etc/fstab`**:
+```fstab
+# NFS NAS Mount Example
+192.168.1.100:/volume1/backups  /mnt/nas/backups  nfs  defaults,rw,nosuid,hard  0  0
+
+# SMB / Windows Share Mount Example
+//192.168.1.100/backups  /mnt/nas/backups  cifs  username=backup_user,password=SecretPass,uid=starbackup,gid=starbackup  0  0
+```
+3. **Windows Hosts**:
+   - Specify absolute drive paths (e.g. `D:/Enterprise_Backups`) or UNC paths (`\\192.168.1.100\backups\star`). Ensure the Windows user running the service has write access.
 
 ---
 

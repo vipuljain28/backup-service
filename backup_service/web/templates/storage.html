@@ -7,17 +7,17 @@
 <div class="space-y-8">
 
   <!-- Header & Description -->
-  <div class="flex items-center justify-between">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div>
       <h2 class="text-lg font-bold text-gray-900">Multi-Cloud Storage Hub</h2>
-      <p class="text-sm text-gray-500">Configure remote cloud destinations with uniform folder hierarchies and chunked resumable transfers.</p>
+      <p class="text-sm text-gray-500">Configure remote cloud destinations with uniform folder hierarchies, chunked transfers, and AES-256-GCM vault security.</p>
     </div>
-    <div>
-      <button type="button" onclick="openGdriveGuideModal()" class="inline-flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-lg shadow-sm transition">
+    <div class="flex items-center space-x-2">
+      <button type="button" onclick="openStorageGuideModal('gdrive')" class="inline-flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-lg shadow-sm transition">
         <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
         </svg>
-        <span>Google Drive Setup Guide</span>
+        <span>📘 Multi-Cloud Credential Setup Guide</span>
       </button>
     </div>
   </div>
@@ -56,22 +56,23 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label class="block font-medium text-gray-700">Destination Name</label>
-          <input type="text" name="name" required placeholder="e.g. Google Drive Production Vault" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+          <input type="text" name="name" required placeholder="e.g. Offsite AWS S3 Vault or Google Drive Storage" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
         </div>
         <div>
           <label class="block font-medium text-gray-700">Storage Provider Type</label>
           <select name="provider_type" id="provider-select" onchange="switchProviderFields(this.value)" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm font-semibold bg-white focus:ring-blue-500 focus:border-blue-500">
             <option value="gdrive">Google Drive (Service Account / OAuth)</option>
             <option value="onedrive">Microsoft OneDrive (Microsoft Graph API)</option>
-            <option value="s3_terabox">S3-Compatible / TeraBox Cloud</option>
+            <option value="s3_terabox">AWS S3 / S3-Compatible / TeraBox Cloud</option>
             <option value="local">Local Storage / Mounted NAS</option>
           </select>
         </div>
       </div>
 
-      <!-- Provider 1: Google Drive Fields -->
+      <!-- =================================================================== -->
+      <!-- Provider 1: Google Drive Fields                                     -->
+      <!-- =================================================================== -->
       <div id="fields-gdrive" class="space-y-5 p-5 bg-blue-50 bg-opacity-30 rounded-xl border border-blue-200">
-        <!-- Google Drive Header with Guide Launcher -->
         <div class="flex items-center justify-between border-b border-blue-200 pb-3">
           <div class="flex items-center space-x-2">
             <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-600 text-white font-bold text-xs shadow-sm">
@@ -79,63 +80,57 @@
             </span>
             <div>
               <h4 class="font-bold text-sm text-gray-900">Google Drive API v3 Settings</h4>
-              <p class="text-xs text-gray-500">Chunked resumable uploads with exponential backoff & team drive support</p>
+              <p class="text-xs text-gray-500">Chunked resumable transfers, service accounts, and folder hierarchies</p>
             </div>
           </div>
-          <button type="button" onclick="openGdriveGuideModal()" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-            </svg>
-            <span>How to get these settings? (Guide)</span>
+          <button type="button" onclick="openStorageGuideModal('gdrive')" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            <span>How to get credentials? (Guide)</span>
           </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <!-- Auth Mode Field -->
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
                 <span>Authentication Mode</span>
-                <button type="button" onclick="openGdriveGuideModal('auth_mode')" class="text-blue-600 hover:text-blue-800 focus:outline-none" title="Click for info on Service Account vs OAuth2">
+                <button type="button" onclick="openStorageGuideModal('gdrive', 'sa')" class="text-blue-600 hover:text-blue-800" title="Click for info on Service Account vs OAuth2">
                   <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                 </button>
               </label>
-              <span class="text-xs text-blue-600 font-medium cursor-pointer hover:underline" onclick="openGdriveGuideModal('auth_mode')">Help</span>
             </div>
             <select name="gdrive_auth_mode" id="gdrive_auth_mode" onchange="toggleGdriveAuthMode(this.value)" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white font-medium focus:ring-blue-500 focus:border-blue-500">
-              <option value="service_account" selected>Service Account (JSON Key) — Recommended for Servers</option>
+              <option value="service_account" selected>Service Account (JSON Key) — Recommended for Unattended Servers</option>
               <option value="oauth_user">OAuth2 Client Flow — Desktop / Personal User</option>
             </select>
-            <p class="text-xs text-gray-500 mt-1">Service Accounts run unattended via systemd/cron without interactive browser prompts.</p>
+            <p class="text-xs text-gray-500 mt-1">Service Accounts run unattended via systemd/cron without human interaction.</p>
           </div>
 
-          <!-- Root Backup Folder Name -->
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
                 <span>Root Backup Folder Name</span>
-                <button type="button" onclick="openGdriveGuideModal('root_folder')" class="text-blue-600 hover:text-blue-800 focus:outline-none" title="What is the Root Backup Folder?">
+                <button type="button" onclick="openStorageGuideModal('gdrive', 'folder')" class="text-blue-600 hover:text-blue-800" title="What is the Root Backup Folder?">
                   <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                 </button>
               </label>
-              <span class="text-xs text-blue-600 font-medium cursor-pointer hover:underline" onclick="openGdriveGuideModal('root_folder')">Folder Schema</span>
             </div>
             <input type="text" name="gdrive_root_folder" id="gdrive_root_folder" value="STAR_Enterprise_Backups" required class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500">
             <p class="text-xs text-gray-500 mt-1">Top-level root folder in Drive. Contains all client daily snapshots & master folder.</p>
           </div>
         </div>
 
-        <!-- Dynamic Option A: Service Account Fields -->
+        <!-- Service Account Path Input -->
         <div id="gdrive-sa-panel" class="space-y-3 pt-2">
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
                 <span>Service Account Key File Path</span>
-                <button type="button" onclick="openGdriveGuideModal('service_account')" class="text-blue-600 hover:text-blue-800 focus:outline-none" title="How to get this JSON key file">
+                <button type="button" onclick="openStorageGuideModal('gdrive', 'sa')" class="text-blue-600 hover:text-blue-800" title="How to get this JSON key file">
                   <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                 </button>
               </label>
-              <button type="button" onclick="openGdriveGuideModal('service_account')" class="text-xs text-blue-700 hover:underline font-semibold">
+              <button type="button" onclick="openStorageGuideModal('gdrive', 'sa')" class="text-xs text-blue-700 hover:underline font-semibold">
                 Where do I get this file?
               </button>
             </div>
@@ -143,7 +138,6 @@
             <span class="text-xs text-gray-500 mt-1 block">Provide absolute path (e.g. <code>/etc/backup_service/service_account.json</code>) or path relative to the server root.</span>
           </div>
 
-          <!-- Crucial Warning Box for Folder Sharing -->
           <div class="p-3.5 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-900 flex items-start space-x-3">
             <span class="text-xl leading-none">⚠️</span>
             <div class="space-y-1">
@@ -151,21 +145,21 @@
               <div>
                 You <strong>MUST</strong> create the folder <code class="bg-amber-100 font-mono px-1 py-0.5 rounded text-amber-950 font-bold">STAR_Enterprise_Backups</code> in your Google Drive and share it with your Service Account email (<code class="bg-amber-100 font-mono px-1 py-0.5 rounded text-amber-950">...iam.gserviceaccount.com</code>) with <strong>Editor</strong> permission.
               </div>
-              <a href="javascript:void(0)" onclick="openGdriveGuideModal('sharing')" class="inline-flex items-center text-blue-700 hover:text-blue-900 underline font-semibold mt-1">
+              <a href="javascript:void(0)" onclick="openStorageGuideModal('gdrive', 'sharing')" class="inline-flex items-center text-blue-700 hover:text-blue-900 underline font-semibold mt-1">
                 View Step-by-Step Sharing Instructions &rarr;
               </a>
             </div>
           </div>
         </div>
 
-        <!-- Dynamic Option B: OAuth2 Client Fields -->
+        <!-- OAuth2 Flow Inputs -->
         <div id="gdrive-oauth-panel" class="space-y-4 pt-2 hidden">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div class="flex items-center justify-between mb-1">
                 <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
                   <span>OAuth2 Client Secret File Path</span>
-                  <button type="button" onclick="openGdriveGuideModal('oauth_user')" class="text-blue-600 hover:text-blue-800 focus:outline-none">
+                  <button type="button" onclick="openStorageGuideModal('gdrive', 'oauth')" class="text-blue-600 hover:text-blue-800">
                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                   </button>
                 </label>
@@ -177,7 +171,7 @@
               <div class="flex items-center justify-between mb-1">
                 <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
                   <span>OAuth2 Token Storage File Path</span>
-                  <button type="button" onclick="openGdriveGuideModal('oauth_user')" class="text-blue-600 hover:text-blue-800 focus:outline-none">
+                  <button type="button" onclick="openStorageGuideModal('gdrive', 'oauth')" class="text-blue-600 hover:text-blue-800">
                     <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
                   </button>
                 </label>
@@ -186,63 +180,177 @@
               <span class="text-xs text-gray-500 mt-1 block">Generated and refreshed automatically after initial interactive sign-in.</span>
             </div>
           </div>
-          <div class="p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start space-x-2">
-            <span class="text-base leading-none">ℹ️</span>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- Provider 2: Microsoft OneDrive (Graph API) Fields                   -->
+      <!-- =================================================================== -->
+      <div id="fields-onedrive" class="space-y-4 p-5 bg-indigo-50 bg-opacity-30 rounded-xl border border-indigo-200 hidden">
+        <div class="flex items-center justify-between border-b border-indigo-200 pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs shadow-sm">
+              OD
+            </span>
             <div>
-              <strong class="font-bold">INTERACTIVE DESKTOP CONSENT:</strong> When triggered for the first time, a local web browser session opens to grant access to your Google Drive. Tokens are subsequently cached in <code class="bg-blue-100 font-mono px-1 py-0.5 rounded">token.json</code>.
+              <h4 class="font-bold text-sm text-gray-900">Microsoft OneDrive (Microsoft Graph API) Settings</h4>
+              <p class="text-xs text-gray-500">Unattended cloud replication via Azure Entra ID Application credentials</p>
             </div>
           </div>
+          <button type="button" onclick="openStorageGuideModal('onedrive')" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            <span>How to get Azure/OneDrive keys? (Guide)</span>
+          </button>
         </div>
-      </div>
 
-      <!-- Provider 2: OneDrive Fields -->
-      <div id="fields-onedrive" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
-        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">Microsoft OneDrive (Graph API) Settings</h4>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block font-medium text-gray-700">Azure Tenant ID</label>
-            <input type="text" name="onedrive_tenant_id" placeholder="common or Directory ID" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Azure Tenant ID</span>
+                <button type="button" onclick="openStorageGuideModal('onedrive')" class="text-indigo-600 hover:text-indigo-800" title="Directory (tenant) ID from Azure Portal">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="text" name="onedrive_tenant_id" placeholder="common or Directory (Tenant) ID" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500">
+            <span class="text-xs text-gray-500 mt-1 block">From Azure App Overview. Use <code>common</code> or tenant UUID.</span>
           </div>
+
           <div>
-            <label class="block font-medium text-gray-700">Application (Client) ID</label>
-            <input type="text" name="onedrive_client_id" placeholder="Azure App Client ID" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Application (Client) ID</span>
+                <button type="button" onclick="openStorageGuideModal('onedrive')" class="text-indigo-600 hover:text-indigo-800" title="Application (client) ID from Azure Portal">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="text" name="onedrive_client_id" placeholder="e.g. 4a2b91c0-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500">
+            <span class="text-xs text-gray-500 mt-1 block">Registered application client ID in Microsoft Entra ID.</span>
           </div>
+
           <div>
-            <label class="block font-medium text-gray-700">Client Secret</label>
-            <input type="password" name="onedrive_client_secret" placeholder="Encrypted at rest" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Client Secret</span>
+                <button type="button" onclick="openStorageGuideModal('onedrive')" class="text-indigo-600 hover:text-indigo-800" title="Client Secret Value from Certificates & Secrets">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="password" name="onedrive_client_secret" placeholder="Encrypted at rest with AES-256-GCM" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500">
+            <span class="text-xs text-gray-500 mt-1 block">Value copied from Azure &gt; Certificates &amp; Secrets.</span>
           </div>
         </div>
       </div>
 
-      <!-- Provider 3: S3 / TeraBox Fields -->
-      <div id="fields-s3_terabox" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
-        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">S3 / TeraBox API Settings</h4>
+      <!-- =================================================================== -->
+      <!-- Provider 3: AWS S3 / TeraBox / S3-Compatible Fields                 -->
+      <!-- =================================================================== -->
+      <div id="fields-s3_terabox" class="space-y-4 p-5 bg-amber-50 bg-opacity-30 rounded-xl border border-amber-200 hidden">
+        <div class="flex items-center justify-between border-b border-amber-200 pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-yellow-600 text-white font-bold text-xs shadow-sm">
+              S3
+            </span>
+            <div>
+              <h4 class="font-bold text-sm text-gray-900">AWS S3 / S3-Compatible / TeraBox API Settings</h4>
+              <p class="text-xs text-gray-500">High-throughput object storage supporting AWS S3, TeraBox, Wasabi, Cloudflare R2, and MinIO</p>
+            </div>
+          </div>
+          <button type="button" onclick="openStorageGuideModal('s3')" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            <span>How to get AWS S3 &amp; TeraBox keys? (Guide)</span>
+          </button>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block font-medium text-gray-700">S3 Endpoint URL (Optional for AWS)</label>
-            <input type="text" name="s3_endpoint_url" placeholder="https://s3.terabox.com or https://s3.amazonaws.com" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>S3 Endpoint URL (Optional for standard AWS)</span>
+                <button type="button" onclick="openStorageGuideModal('s3', 'endpoints')" class="text-yellow-600 hover:text-yellow-800" title="Endpoint URLs for TeraBox, Wasabi, or MinIO">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="text" name="s3_endpoint_url" placeholder="https://s3.terabox.com or https://s3.amazonaws.com" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-yellow-500 focus:border-yellow-500">
+            <span class="text-xs text-gray-500 mt-1 block">Leave empty for official AWS S3. Enter endpoint for TeraBox, Wasabi, or MinIO.</span>
           </div>
+
           <div>
-            <label class="block font-medium text-gray-700">Bucket Name</label>
-            <input type="text" name="s3_bucket_name" placeholder="my-enterprise-backups" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Bucket Name</span>
+                <button type="button" onclick="openStorageGuideModal('s3', 'bucket')" class="text-yellow-600 hover:text-yellow-800" title="S3 Bucket creation guidelines">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="text" name="s3_bucket_name" placeholder="my-enterprise-backups" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-yellow-500 focus:border-yellow-500">
+            <span class="text-xs text-gray-500 mt-1 block">Pre-created S3 bucket in your cloud provider account.</span>
           </div>
+
           <div>
-            <label class="block font-medium text-gray-700">Access Key ID</label>
-            <input type="text" name="s3_access_key" placeholder="AKIA..." class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Access Key ID</span>
+                <button type="button" onclick="openStorageGuideModal('s3', 'iam')" class="text-yellow-600 hover:text-yellow-800" title="How to generate IAM Access Key">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="text" name="s3_access_key" placeholder="AKIAIOSFODNN7EXAMPLE" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-yellow-500 focus:border-yellow-500">
+            <span class="text-xs text-gray-500 mt-1 block">AWS IAM Access Key ID or S3-compatible access identifier.</span>
           </div>
+
           <div>
-            <label class="block font-medium text-gray-700">Secret Access Key</label>
-            <input type="password" name="s3_secret_key" placeholder="Encrypted at rest" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+                <span>Secret Access Key</span>
+                <button type="button" onclick="openStorageGuideModal('s3', 'iam')" class="text-yellow-600 hover:text-yellow-800" title="Secret Access Key security">
+                  <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                </button>
+              </label>
+            </div>
+            <input type="password" name="s3_secret_key" placeholder="Encrypted at rest with AES-256-GCM" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-yellow-500 focus:border-yellow-500">
+            <span class="text-xs text-gray-500 mt-1 block">40-character secret key generated from AWS IAM or TeraBox dashboard.</span>
           </div>
         </div>
       </div>
 
-      <!-- Provider 4: Local Storage Fields -->
-      <div id="fields-local" class="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
-        <h4 class="font-bold text-xs uppercase tracking-wider text-blue-700">Local Filesystem / NAS Mount Settings</h4>
+      <!-- =================================================================== -->
+      <!-- Provider 4: Local Storage / Mounted NAS Fields                      -->
+      <!-- =================================================================== -->
+      <div id="fields-local" class="space-y-4 p-5 bg-green-50 bg-opacity-30 rounded-xl border border-green-200 hidden">
+        <div class="flex items-center justify-between border-b border-green-200 pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-green-600 text-white font-bold text-xs shadow-sm">
+              NAS
+            </span>
+            <div>
+              <h4 class="font-bold text-sm text-gray-900">Local Filesystem / Mounted NAS Settings</h4>
+              <p class="text-xs text-gray-500">Store backups on local NVMe arrays, external USB drives, or mounted NFS/SMB NAS volumes</p>
+            </div>
+          </div>
+          <button type="button" onclick="openStorageGuideModal('local')" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            <span>Local Directory &amp; NAS Guide</span>
+          </button>
+        </div>
+
         <div>
-          <label class="block font-medium text-gray-700">Target Root Directory</label>
-          <input type="text" name="local_root_dir" value="./local_cloud_backup" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-semibold text-gray-700 flex items-center space-x-1.5">
+              <span>Target Root Directory</span>
+              <button type="button" onclick="openStorageGuideModal('local')" class="text-green-600 hover:text-green-800" title="Permissions and setup guide for local storage">
+                <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+              </button>
+            </label>
+          </div>
+          <input type="text" name="local_root_dir" value="./local_cloud_backup" placeholder="/mnt/nas/backups or D:/Enterprise_Backups" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-green-500 focus:border-green-500">
+          <span class="text-xs text-gray-500 mt-1 block">Absolute path on the host server or relative to server root. Ensure read/write permissions for the service user.</span>
         </div>
       </div>
 
@@ -262,9 +370,9 @@
 </div>
 
 <!-- ========================================================================= -->
-<!-- Modal: How to get Google Drive API v3 Settings & Credentials (Popup)       -->
+<!-- Modal: Multi-Cloud Credential & Storage Setup Guide (Popup)               -->
 <!-- ========================================================================= -->
-<div id="modal-gdrive-guide" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden p-4 backdrop-filter backdrop-blur-sm">
+<div id="modal-storage-guide" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center hidden p-4 backdrop-filter backdrop-blur-sm">
   <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-fade-in border border-gray-200">
 
     <!-- Modal Header -->
@@ -276,296 +384,321 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-base font-bold text-white">Google Drive API v3 Setup Guide</h3>
-          <p class="text-xs text-gray-400">Step-by-step instructions for Service Account, OAuth2, and Folder Sharing</p>
+          <h3 class="text-base font-bold text-white">Multi-Cloud Storage Credential &amp; Setup Guide</h3>
+          <p class="text-xs text-gray-400">Step-by-step instructions to obtain API keys and configure storage destinations</p>
         </div>
       </div>
-      <button onclick="closeGdriveGuideModal()" class="text-gray-400 hover:text-white rounded-lg p-1.5 hover:bg-gray-800 transition focus:outline-none">
+      <button onclick="closeStorageGuideModal()" class="text-gray-400 hover:text-white rounded-lg p-1.5 hover:bg-gray-800 transition focus:outline-none">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
         </svg>
       </button>
     </div>
 
-    <!-- Modal Tab Navigation Bar -->
+    <!-- Provider Selection Navigation Bar -->
     <div class="flex border-b border-gray-200 bg-gray-50 px-6 pt-2 flex-shrink-0 space-x-2 overflow-x-auto text-xs font-semibold">
-      <button type="button" id="tab-btn-sa" onclick="switchGuideTab('sa')" class="py-2.5 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none transition">
-        1. Service Account (Recommended)
+      <button type="button" id="tab-btn-gdrive" onclick="switchMainStorageTab('gdrive')" class="py-2.5 px-4 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none transition flex items-center space-x-1.5">
+        <span>📁 Google Drive (API v3)</span>
       </button>
-      <button type="button" id="tab-btn-sharing" onclick="switchGuideTab('sharing')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition">
-        2. Folder Sharing (Mandatory)
+      <button type="button" id="tab-btn-onedrive" onclick="switchMainStorageTab('onedrive')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition flex items-center space-x-1.5">
+        <span>☁️ Microsoft OneDrive (Graph API)</span>
       </button>
-      <button type="button" id="tab-btn-folder" onclick="switchGuideTab('folder')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition">
-        3. Root Folder & Retention
+      <button type="button" id="tab-btn-s3" onclick="switchMainStorageTab('s3')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition flex items-center space-x-1.5">
+        <span>🪣 AWS S3 &amp; TeraBox Cloud</span>
       </button>
-      <button type="button" id="tab-btn-oauth" onclick="switchGuideTab('oauth')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition">
-        4. OAuth2 Client Flow
-      </button>
-      <button type="button" id="tab-btn-faq" onclick="switchGuideTab('faq')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition">
-        5. Troubleshooting
+      <button type="button" id="tab-btn-local" onclick="switchMainStorageTab('local')" class="py-2.5 px-4 border-b-2 border-transparent text-gray-500 hover:text-gray-800 focus:outline-none transition flex items-center space-x-1.5">
+        <span>💾 Local Storage &amp; NAS Mount</span>
       </button>
     </div>
 
     <!-- Modal Body (Scrollable) -->
     <div class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700 flex-1 leading-relaxed">
 
-      <!-- ========================================== -->
-      <!-- TAB 1: Service Account (Recommended)       -->
-      <!-- ========================================== -->
-      <div id="guide-tab-sa" class="space-y-5">
-        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-lg">
-          <h4 class="font-bold text-blue-900 text-sm">Why Service Account is Recommended for Enterprise Servers</h4>
-          <p class="text-xs text-blue-800 mt-1">
-            Service accounts represent non-human server identities. They run completely unattended via Linux <code>systemd</code> timers or Windows Scheduled Tasks without prompting for interactive logins or expiring browser sessions.
-          </p>
+      <!-- =================================================================== -->
+      <!-- SECTION 1: GOOGLE DRIVE GUIDE                                       -->
+      <!-- =================================================================== -->
+      <div id="content-provider-gdrive" class="space-y-6">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h4 class="text-sm font-bold text-gray-900 uppercase tracking-wide">Google Drive API v3 Configuration</h4>
+          <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-semibold">Service Account &bull; OAuth2</span>
+        </div>
+
+        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-lg text-xs text-blue-900">
+          <strong>Recommended Mode:</strong> Use <strong>Service Account</strong> for automated server cron / systemd background jobs. Service accounts run without user browser popups and never expire.
         </div>
 
         <div class="space-y-4">
           <div class="flex items-start space-x-3">
             <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">1</span>
             <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Open Google Cloud Console & Create a Project</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Visit <a href="https://console.cloud.google.com/" target="_blank" class="text-blue-600 underline font-semibold">https://console.cloud.google.com/</a>. Log in with your Google account. Click the project dropdown at the top &gt; click <strong>New Project</strong>. Name it (e.g. <code>Enterprise-Backup-System</code>) and click <strong>Create</strong>.</p>
+              <h5 class="font-bold text-gray-900">Google Cloud Console Setup</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Visit <a href="https://console.cloud.google.com/" target="_blank" class="text-blue-600 underline font-semibold">https://console.cloud.google.com/</a>. Create a new project (e.g. <code>Enterprise-Backup-System</code>). Under <strong>APIs &amp; Services &gt; Library</strong>, search for <strong>Google Drive API</strong> and click <strong>Enable</strong>.</p>
             </div>
           </div>
 
           <div class="flex items-start space-x-3">
             <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">2</span>
             <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Enable Google Drive API v3</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Navigate to <strong>APIs &amp; Services &gt; Library</strong> in the left sidebar. In the search box, type <code class="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-gray-800">Google Drive API</code>. Click on it and click the blue <strong>Enable</strong> button.</p>
+              <h5 class="font-bold text-gray-900">Create Service Account &amp; Download JSON Key</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Go to <strong>APIs &amp; Services &gt; Credentials &gt; + CREATE CREDENTIALS &gt; Service Account</strong>. Name it <code>backup-operator</code> and click Done. Click on the created service account email &gt; go to <strong>Keys</strong> tab &gt; <strong>Add Key &gt; Create new key &gt; JSON</strong>. Download the JSON key file.</p>
+              <div class="mt-2 bg-gray-900 text-gray-100 rounded-lg p-2.5 font-mono text-xs flex items-center justify-between">
+                <span>Save to: /etc/backup_service/service_account.json (or ./service_account.json)</span>
+                <button type="button" onclick="navigator.clipboard.writeText('./service_account.json')" class="bg-gray-800 text-blue-400 px-2 py-0.5 rounded text-xs">Copy</button>
+              </div>
             </div>
           </div>
 
           <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold">3</span>
             <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Create a Service Account</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Navigate to <strong>APIs &amp; Services &gt; Credentials</strong>. Click <strong>+ CREATE CREDENTIALS</strong> at the top &gt; select <strong>Service Account</strong>.</p>
-              <ul class="list-disc list-inside text-xs text-gray-600 mt-1 space-y-1">
-                <li><strong>Service account name:</strong> e.g. <code>backup-operator</code></li>
-                <li><strong>Service account ID:</strong> auto-filled (e.g. <code>backup-operator@your-project-id.iam.gserviceaccount.com</code>)</li>
-                <li>Click <strong>CREATE AND CONTINUE</strong>, and then click <strong>DONE</strong>.</li>
-              </ul>
+              <h5 class="font-bold text-red-900">🚨 MANDATORY PERMISSION STEP: Share Drive Folder</h5>
+              <div class="mt-1 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900 space-y-2">
+                <p>Service Accounts do NOT have a personal Drive UI. You must grant them write permission into your Google Drive:</p>
+                <ol class="list-decimal list-inside space-y-1">
+                  <li>Copy your Service Account email: <code class="font-mono bg-red-100 px-1 py-0.5 rounded text-red-950 font-bold">...iam.gserviceaccount.com</code></li>
+                  <li>In Google Drive ([drive.google.com](https://drive.google.com)), create a folder named <code class="font-bold">STAR_Enterprise_Backups</code>.</li>
+                  <li>Right-click the folder &gt; <strong>Share</strong> &gt; Paste the Service Account email.</li>
+                  <li>Set permission to <strong>Editor</strong> (uncheck "Notify people") &gt; Click <strong>Share</strong>.</li>
+                </ol>
+              </div>
             </div>
           </div>
 
           <div class="flex items-start space-x-3">
             <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">4</span>
             <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Generate and Download the JSON Key File</h5>
-              <p class="text-xs text-gray-600 mt-0.5">In the <strong>Credentials</strong> screen, locate your newly created service account under the <em>Service Accounts</em> table. Click on its email address. Then:</p>
-              <ol class="list-decimal list-inside text-xs text-gray-600 mt-1 space-y-1">
-                <li>Click on the <strong>Keys</strong> tab at the top.</li>
-                <li>Click <strong>ADD KEY &gt; Create new key</strong>.</li>
-                <li>Select <strong>JSON</strong> as the key type. Click <strong>CREATE</strong>.</li>
-                <li>A file named something like <code>your-project-xxxx.json</code> will automatically download to your computer.</li>
-              </ol>
+              <h5 class="font-bold text-gray-900">Alternative: OAuth2 Client Flow (Personal Use)</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Go to <strong>APIs &amp; Services &gt; OAuth consent screen</strong> (External, add scope <code>.../auth/drive</code>, add your email to Test Users). Then under <strong>Credentials &gt; OAuth client ID</strong>, choose <strong>Desktop app</strong>, download <code class="font-mono">client_secret.json</code>. On initial run, a browser sign-in generates <code class="font-mono">token.json</code>.</p>
             </div>
           </div>
-
-          <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">5</span>
-            <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Position the JSON File on your Server</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Copy the downloaded file to your backup server directory (or secure system directory like <code>/etc/backup_service/</code>). For example:</p>
-              <div class="mt-2 bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-xs flex items-center justify-between">
-                <span>./service_account.json &nbsp;&nbsp;<span class="text-gray-400"># (relative to server root)</span><br>/etc/backup_service/service_account.json &nbsp;&nbsp;<span class="text-gray-400"># (or absolute path)</span></span>
-                <button type="button" onclick="navigator.clipboard.writeText('./service_account.json')" class="bg-gray-800 hover:bg-gray-700 text-xs text-blue-400 px-2 py-1 rounded">Copy Path</button>
-              </div>
-              <p class="text-xs text-gray-500 mt-1.5">Enter this exact path into the <strong>Service Account Key File Path</strong> field.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-3 border-t">
-          <button type="button" onclick="switchGuideTab('sharing')" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition flex items-center justify-center space-x-2">
-            <span>Next: Mandatory Step &mdash; Sharing Google Drive Folder &rarr;</span>
-          </button>
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB 2: Folder Sharing (Mandatory)          -->
-      <!-- ========================================== -->
-      <div id="guide-tab-sharing" class="space-y-5 hidden">
-        <div class="p-4 bg-red-50 border-l-4 border-red-600 rounded-r-lg">
-          <h4 class="font-bold text-red-900 text-sm">🚨 Crucial Google Architecture Notice: Folder Sharing</h4>
-          <p class="text-xs text-red-800 mt-1">
-            Unlike human Google accounts, a Service Account has its own isolated, empty virtual drive without a personal Google Drive UI. If you do not share your Google Drive folder with the Service Account email, backups will fail with <code>404 File Not Found</code>!
-          </p>
+      <!-- =================================================================== -->
+      <!-- SECTION 2: MICROSOFT ONEDRIVE GUIDE                                 -->
+      <!-- =================================================================== -->
+      <div id="content-provider-onedrive" class="space-y-6 hidden">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h4 class="text-sm font-bold text-gray-900 uppercase tracking-wide">Microsoft OneDrive &amp; SharePoint (Graph API)</h4>
+          <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-semibold">Microsoft Entra ID / Azure AD</span>
+        </div>
+
+        <div class="bg-indigo-50 border-l-4 border-indigo-600 p-4 rounded-r-lg text-xs text-indigo-900">
+          <strong>Authentication Flow:</strong> OneDrive connects via Microsoft Graph OAuth2 Client Credentials flow. Backups stream directly to OneDrive or SharePoint document libraries unattended.
         </div>
 
         <div class="space-y-4">
           <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">1</span>
             <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Copy the Service Account Email</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Open your downloaded <code>service_account.json</code> file or check Google Cloud Console Credentials. Look for the <code class="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-800">"client_email"</code> attribute, which looks like:</p>
-              <div class="mt-1 bg-gray-900 text-gray-100 rounded p-2.5 font-mono text-xs">
-                backup-operator@enterprise-backup-system.iam.gserviceaccount.com
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">2</span>
-            <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Create the Root Backup Folder in Google Drive</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Go to your personal or Google Workspace Drive (<a href="https://drive.google.com" target="_blank" class="text-blue-600 underline font-semibold">https://drive.google.com</a>). Click <strong>+ New &gt; New Folder</strong>. Name it exactly:</p>
-              <div class="mt-1 bg-gray-100 border border-gray-300 rounded p-2 font-mono text-xs font-bold text-gray-800 flex items-center justify-between">
-                <span>STAR_Enterprise_Backups</span>
-                <button type="button" onclick="navigator.clipboard.writeText('STAR_Enterprise_Backups')" class="bg-white border text-xs text-blue-600 px-2 py-0.5 rounded shadow-xs">Copy Name</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">3</span>
-            <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Share the Folder with Editor Permission</h5>
-              <ol class="list-decimal list-inside text-xs text-gray-600 mt-1 space-y-1">
-                <li>Right-click the newly created <code class="font-bold">STAR_Enterprise_Backups</code> folder.</li>
-                <li>Select <strong>Share</strong> &gt; <strong>Share</strong>.</li>
-                <li>Paste the Service Account email in the <em>Add people and groups</em> box.</li>
-                <li>Make sure the role dropdown is set to <strong>Editor</strong> (Viewer is read-only and will cause writes to fail).</li>
-                <li>Uncheck the <em>Notify people</em> box (service accounts do not have inboxes).</li>
-                <li>Click <strong>Share</strong>.</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        <div class="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-900">
-          <strong>Ready!</strong> Now your enterprise backup engine can stream compressed databases and directory snapshots directly into your Google Drive securely!
-        </div>
-      </div>
-
-      <!-- ========================================== -->
-      <!-- TAB 3: Root Folder & Retention Architecture-->
-      <!-- ========================================== -->
-      <div id="guide-tab-folder" class="space-y-5 hidden">
-        <div>
-          <h4 class="font-bold text-gray-900 text-sm">Understanding the Root Backup Folder Hierarchy</h4>
-          <p class="text-xs text-gray-600 mt-1">
-            The <strong>Root Backup Folder Name</strong> (default: <code>STAR_Enterprise_Backups</code>) acts as the enterprise top-level storage container. The service maintains an isolated, uniform directory layout for each tenant client:
-          </p>
-        </div>
-
-        <div class="bg-gray-900 text-gray-200 rounded-xl p-4 font-mono text-xs overflow-x-auto">
-          STAR_Enterprise_Backups/<br>
-          ├── client_tenant_1/<br>
-          │   ├── daily/<br>
-          │   │   ├── 2026-11-10/  <span class="text-gray-500"># (daily incremental snapshot)</span><br>
-          │   │   │   ├── db_starcalibration.sql.gz<br>
-          │   │   │   ├── folder_uploads.tar.gz<br>
-          │   │   │   └── manifest.json<br>
-          │   │   ├── 2026-11-11/<br>
-          │   │   └── 2026-11-12/<br>
-          │   ├── master/          <span class="text-blue-400"># (cumulative master snapshot)</span><br>
-          │   │   ├── db_starcalibration.sql.gz<br>
-          │   │   └── folder_uploads.tar.gz<br>
-          │   └── audit_manifest_2026-11-12.txt  <span class="text-green-400"># (OWASP mutation audit log)</span><br>
-          └── client_tenant_2/<br>
-          &nbsp;&nbsp;&nbsp;&nbsp;└── ...
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-3 bg-gray-50 border rounded-lg space-y-1">
-            <span class="font-bold text-gray-900">10-Day Retention Window</span>
-            <p class="text-gray-600">The sliding retention window automatically prunes daily snapshots older than 10 days in the <code>daily/</code> folder. The <code>master/</code> directory is never deleted.</p>
-          </div>
-          <div class="p-3 bg-gray-50 border rounded-lg space-y-1">
-            <span class="font-bold text-gray-900">Zero-Deletion File Audit Log</span>
-            <p class="text-gray-600">Files removed from client servers are never deleted from remote backups; mutations are tracked with exact timestamps in <code>audit_manifest.txt</code>.</p>
-          </div>
-        </div>
-
-        <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
-          <strong>Reconnecting Existing Backups:</strong> If you ever reinstall this backup service or move to a new machine, you can simply register the same Root Backup Folder Name (<code>STAR_Enterprise_Backups</code>) to instantly discover and restore historical backups!
-        </div>
-      </div>
-
-      <!-- ========================================== -->
-      <!-- TAB 4: OAuth2 Client Flow                  -->
-      <!-- ========================================== -->
-      <div id="guide-tab-oauth" class="space-y-5 hidden">
-        <div class="bg-purple-50 border-l-4 border-purple-600 p-4 rounded-r-lg">
-          <h4 class="font-bold text-purple-900 text-sm">When to Choose OAuth2 Client Flow</h4>
-          <p class="text-xs text-purple-800 mt-1">
-            Choose OAuth2 if your Google Workspace administrator restricts Service Accounts or if you are running this backup manager directly on your local workstation with interactive browser authorization.
-          </p>
-        </div>
-
-        <div class="space-y-4">
-          <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">1</span>
-            <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Configure OAuth Consent Screen</h5>
-              <p class="text-xs text-gray-600 mt-0.5">In Google Cloud Console, navigate to <strong>APIs &amp; Services &gt; OAuth consent screen</strong>.</p>
+              <h5 class="font-bold text-gray-900">Azure Portal App Registration</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Go to the <a href="https://portal.azure.com/" target="_blank" class="text-indigo-600 underline font-semibold">Azure Portal</a> or <a href="https://entra.microsoft.com/" target="_blank" class="text-indigo-600 underline font-semibold">Microsoft Entra admin center</a>. Navigate to <strong>Microsoft Entra ID &gt; App registrations &gt; + New registration</strong>.</p>
               <ul class="list-disc list-inside text-xs text-gray-600 mt-1 space-y-1">
-                <li>Select <strong>External</strong> (or <strong>Internal</strong> if in a Workspace organization).</li>
-                <li>Fill in <em>App name</em> (e.g. <code>Star Enterprise Backup</code>) and your user support email.</li>
-                <li>Under <strong>Scopes</strong>, add <code class="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-800">https://www.googleapis.com/auth/drive</code>.</li>
-                <li>Under <strong>Test users</strong>, add your personal Gmail address and save.</li>
+                <li><strong>Name:</strong> <code>StarEnterpriseBackup</code></li>
+                <li><strong>Supported account types:</strong> Select <em>Accounts in any organizational directory and personal Microsoft accounts</em> (or Single tenant for enterprise).</li>
+                <li>Click <strong>Register</strong>.</li>
               </ul>
             </div>
           </div>
 
           <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">2</span>
             <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Create OAuth 2.0 Client ID</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Go to <strong>APIs &amp; Services &gt; Credentials &gt; + CREATE CREDENTIALS &gt; OAuth client ID</strong>.</p>
+              <h5 class="font-bold text-gray-900">Copy Tenant ID and Client ID</h5>
+              <p class="text-xs text-gray-600 mt-0.5">On the App <strong>Overview</strong> screen, copy the following values into this console:</p>
+              <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                <div class="p-2.5 bg-gray-900 text-gray-200 rounded">
+                  <span class="text-indigo-400 font-bold block">Application (client) ID:</span>
+                  <span>4a2b91c0-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span>
+                </div>
+                <div class="p-2.5 bg-gray-900 text-gray-200 rounded">
+                  <span class="text-indigo-400 font-bold block">Directory (tenant) ID:</span>
+                  <span>common (or organizational UUID)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Create Client Secret (Key)</h5>
+              <p class="text-xs text-gray-600 mt-0.5">In the left sidebar, click <strong>Certificates &amp; secrets &gt; + New client secret</strong>.</p>
+              <ol class="list-decimal list-inside text-xs text-gray-600 mt-1 space-y-1">
+                <li>Description: <code>backup-encryption-key</code>. Expiration: 24 months.</li>
+                <li>Click <strong>Add</strong>.</li>
+                <li>⚠️ <strong>CRITICAL:</strong> Immediately copy the string in the <strong>Value</strong> column. (Azure permanently hides this value once you navigate away!).</li>
+                <li>Paste this into the <strong>Client Secret</strong> field in the storage configuration.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">4</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Grant Microsoft Graph API Permissions</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Click <strong>API permissions &gt; + Add a permission &gt; Microsoft Graph</strong>:</p>
               <ul class="list-disc list-inside text-xs text-gray-600 mt-1 space-y-1">
-                <li><strong>Application type:</strong> Select <strong>Desktop app</strong>.</li>
-                <li><strong>Name:</strong> <code>Backup Desktop Client</code></li>
-                <li>Click <strong>CREATE</strong>.</li>
+                <li>Select <strong>Application permissions</strong> (for background unattended service) or <strong>Delegated permissions</strong>.</li>
+                <li>Search for and check: <code class="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-800">Files.ReadWrite.All</code></li>
+                <li>Search for and check: <code class="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-800">offline_access</code></li>
+                <li>Click <strong>Add permissions</strong>.</li>
+                <li>Click <strong>Grant admin consent for [Your Tenant]</strong> button.</li>
               </ul>
-            </div>
-          </div>
-
-          <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">3</span>
-            <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Download and Rename Client Secret</h5>
-              <p class="text-xs text-gray-600 mt-0.5">Click <strong>DOWNLOAD JSON</strong> next to your new client ID. Rename the file to <code class="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold text-gray-800">client_secret.json</code> and place it in the project root directory.</p>
-            </div>
-          </div>
-
-          <div class="flex items-start space-x-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">4</span>
-            <div class="flex-1">
-              <h5 class="font-bold text-gray-900">Initial Authorization & Token Generation</h5>
-              <p class="text-xs text-gray-600 mt-0.5">During the first backup execution or health test, a browser window opens requesting permission. After approving, the authentication token is permanently saved to <code class="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-800">token.json</code>.</p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ========================================== -->
-      <!-- TAB 5: Troubleshooting & FAQ               -->
-      <!-- ========================================== -->
-      <div id="guide-tab-faq" class="space-y-4 hidden">
-        <h4 class="font-bold text-gray-900 text-sm">Common Issues &amp; Quick Fixes</h4>
+      <!-- =================================================================== -->
+      <!-- SECTION 3: AWS S3 & TERABOX GUIDE                                   -->
+      <!-- =================================================================== -->
+      <div id="content-provider-s3" class="space-y-6 hidden">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h4 class="text-sm font-bold text-gray-900 uppercase tracking-wide">AWS S3 / S3-Compatible &amp; TeraBox Cloud</h4>
+          <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-semibold">IAM &bull; Least-Privilege &bull; S3 Protocol</span>
+        </div>
 
-        <div class="space-y-3 text-xs">
-          <div class="p-3 bg-red-50 border border-red-200 rounded-lg">
-            <strong class="text-red-900 font-bold block">Error: 404 File Not Found / Folder Not Accessible</strong>
-            <span class="text-red-800 mt-1 block"><strong>Cause:</strong> The Google Drive folder is not shared with the Service Account email.<br>
-            <strong>Fix:</strong> Open Google Drive &gt; right-click <code class="font-bold">STAR_Enterprise_Backups</code> &gt; Share &gt; paste your Service Account email (<code class="font-mono">...iam.gserviceaccount.com</code>) &gt; give <strong>Editor</strong> rights.</span>
+        <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4 rounded-r-lg text-xs text-yellow-900">
+          <strong>Broad Compatibility:</strong> This engine speaks native Amazon S3 API protocol. It works out-of-the-box with AWS S3, TeraBox S3, Wasabi Hot Cloud, MinIO on-premises, Backblaze B2, and Cloudflare R2.
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Create S3 Bucket in AWS Console</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Go to <a href="https://console.aws.amazon.com/s3/" target="_blank" class="text-yellow-700 underline font-semibold">AWS S3 Console</a> &gt; click <strong>Create bucket</strong>.</p>
+              <ul class="list-disc list-inside text-xs text-gray-600 mt-1 space-y-1">
+                <li><strong>Bucket name:</strong> e.g. <code>my-enterprise-backups-star</code> (globally unique).</li>
+                <li><strong>AWS Region:</strong> Choose your preferred region (e.g. <code>us-east-1</code>, <code>eu-west-1</code>, <code>ap-south-1</code>).</li>
+                <li><strong>Block Public Access:</strong> Keep all 4 settings checked (keep bucket private).</li>
+                <li><strong>Bucket Encryption:</strong> Enable Amazon S3-managed keys (SSE-S3).</li>
+                <li>Click <strong>Create bucket</strong>.</li>
+              </ul>
+            </div>
           </div>
 
-          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <strong class="text-amber-900 font-bold block">Error: 403 Forbidden / Insufficient Permissions</strong>
-            <span class="text-amber-800 mt-1 block"><strong>Cause:</strong> The Service Account was given "Viewer" or "Commenter" permission instead of "Editor".<br>
-            <strong>Fix:</strong> Change the folder permission in Google Drive to <strong>Editor</strong> so the service can upload and create subdirectories.</span>
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Create Dedicated IAM User &amp; Access Keys</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Go to <a href="https://console.aws.amazon.com/iam/" target="_blank" class="text-yellow-700 underline font-semibold">AWS IAM Console</a> &gt; <strong>Users &gt; Create user</strong>.</p>
+              <ol class="list-decimal list-inside text-xs text-gray-600 mt-1 space-y-1">
+                <li>Username: <code>star-backup-operator</code> &gt; Click Next.</li>
+                <li>Permissions: Select <em>Attach policies directly</em> &gt; choose <code>AmazonS3FullAccess</code> (or custom least-privilege policy below) &gt; Create User.</li>
+                <li>Click on the user name &gt; go to <strong>Security credentials</strong> tab &gt; click <strong>Create access key</strong>.</li>
+                <li>Select <strong>Application running outside AWS</strong> &gt; Create access key.</li>
+                <li>Copy <strong>Access Key ID</strong> (e.g. <code class="font-mono">AKIA...</code>) and <strong>Secret Access Key</strong>.</li>
+              </ol>
+            </div>
           </div>
 
-          <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <strong class="text-gray-900 font-bold block">Error: FileNotFoundError: ./service_account.json</strong>
-            <span class="text-gray-700 mt-1 block"><strong>Cause:</strong> The path specified does not match the actual location of the key file on the server.<br>
-            <strong>Fix:</strong> Use an absolute path like <code class="font-mono">/etc/backup_service/service_account.json</code> (on Linux) or <code class="font-mono">C:/backup_service/service_account.json</code> (on Windows). Ensure read permissions for the web server user.</span>
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Least-Privilege IAM Policy (Production Recommended)</h5>
+              <p class="text-xs text-gray-600 mt-0.5">For enterprise compliance, restrict IAM permissions strictly to your backup bucket:</p>
+              <div class="mt-2 bg-gray-900 text-gray-200 rounded p-3 font-mono text-xs overflow-x-auto relative">
+                <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('iam-json-snippet').innerText)" class="absolute top-2 right-2 bg-gray-800 text-yellow-400 px-2 py-0.5 rounded text-xs">Copy JSON</button>
+                <pre id="iam-json-snippet">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": "arn:aws:s3:::my-enterprise-backups-star"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::my-enterprise-backups-star/*"
+    }
+  ]
+}</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-600 text-white flex items-center justify-center text-xs font-bold">4</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">S3 Endpoint URLs for TeraBox &amp; S3 Providers</h5>
+              <div class="mt-1 space-y-2 text-xs">
+                <div class="p-2.5 bg-gray-50 border rounded flex justify-between items-center">
+                  <div><strong>Standard AWS S3:</strong> <span class="text-gray-500">Leave field blank or set <code>https://s3.amazonaws.com</code></span></div>
+                </div>
+                <div class="p-2.5 bg-gray-50 border rounded flex justify-between items-center">
+                  <div><strong>TeraBox S3 Gateway:</strong> <code class="font-mono text-yellow-800">https://s3.terabox.com</code></div>
+                </div>
+                <div class="p-2.5 bg-gray-50 border rounded flex justify-between items-center">
+                  <div><strong>Wasabi Hot Cloud:</strong> <code class="font-mono text-yellow-800">https://s3.wasabisys.com</code></div>
+                </div>
+                <div class="p-2.5 bg-gray-50 border rounded flex justify-between items-center">
+                  <div><strong>MinIO Self-Hosted:</strong> <code class="font-mono text-yellow-800">http://192.168.1.100:9000</code></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- SECTION 4: LOCAL FILESYSTEM & NAS GUIDE                             -->
+      <!-- =================================================================== -->
+      <div id="content-provider-local" class="space-y-6 hidden">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h4 class="text-sm font-bold text-gray-900 uppercase tracking-wide">Local Filesystem &amp; Network Attached Storage (NAS)</h4>
+          <span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded font-semibold">NFS &bull; CIFS/SMB &bull; NVMe / Direct Attached</span>
+        </div>
+
+        <div class="bg-green-50 border-l-4 border-green-600 p-4 rounded-r-lg text-xs text-green-900">
+          <strong>Zero Cloud Cost Option:</strong> Ideal for air-gapped data centers, internal company NAS appliances (Synology, QNAP, TrueNAS), or local test environments.
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Directory Creation &amp; Linux Permissions</h5>
+              <p class="text-xs text-gray-600 mt-0.5">Ensure the target path exists and the backup service user has read &amp; write permissions:</p>
+              <div class="mt-2 bg-gray-900 text-gray-100 rounded p-3 font-mono text-xs space-y-1">
+                <p><span class="text-gray-400"># Create storage directory</span><br>sudo mkdir -p /mnt/nas/backups</p>
+                <p><span class="text-gray-400"># Assign ownership to service user</span><br>sudo chown -R starbackup:starbackup /mnt/nas/backups</p>
+                <p><span class="text-gray-400"># Restrict permissions (owner read/write/exec, group read/exec)</span><br>sudo chmod -R 750 /mnt/nas/backups</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Automated NAS Mount via /etc/fstab</h5>
+              <p class="text-xs text-gray-600 mt-0.5">To permanently mount a network storage volume on Linux reboot:</p>
+              <div class="mt-2 bg-gray-900 text-gray-100 rounded p-3 font-mono text-xs space-y-2">
+                <div>
+                  <span class="text-green-400 font-bold block"># NFS NAS Mount Example (/etc/fstab):</span>
+                  <span>192.168.1.100:/volume1/backups &nbsp;/mnt/nas/backups &nbsp;nfs &nbsp;defaults,rw,nosuid,hard &nbsp;0 &nbsp;0</span>
+                </div>
+                <div>
+                  <span class="text-green-400 font-bold block"># SMB / CIFS Windows Share Mount (/etc/fstab):</span>
+                  <span>//192.168.1.100/backups &nbsp;/mnt/nas/backups &nbsp;cifs &nbsp;username=backup_user,password=SecretPass,uid=starbackup,gid=starbackup &nbsp;0 &nbsp;0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-start space-x-3">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+            <div class="flex-1">
+              <h5 class="font-bold text-gray-900">Windows Host Configuration</h5>
+              <p class="text-xs text-gray-600 mt-0.5">On Windows systems, provide an absolute drive path (e.g. <code>D:/Enterprise_Backups</code>) or a direct UNC network path (e.g. <code>\\192.168.1.100\backups\star</code>). Ensure the Windows user running Python has Full Control in folder Security Properties.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -577,7 +710,7 @@
       <div class="text-xs text-gray-500">
         Enterprise Backup Platform &bull; Security Level: AES-256-GCM Vault
       </div>
-      <button type="button" onclick="closeGdriveGuideModal()" class="px-5 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-sm transition">
+      <button type="button" onclick="closeStorageGuideModal()" class="px-5 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-sm transition">
         Understood &amp; Close Guide
       </button>
     </div>
@@ -613,47 +746,39 @@ function toggleGdriveAuthMode(mode) {
   }
 }
 
-// Modal management
-function openGdriveGuideModal(targetTab) {
-  const modal = document.getElementById('modal-gdrive-guide');
+// Open Multi-Cloud Storage Setup Guide Modal
+function openStorageGuideModal(provider, subSection) {
+  const modal = document.getElementById('modal-storage-guide');
   if (modal) {
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
   }
 
-  if (targetTab === 'auth_mode' || targetTab === 'service_account') {
-    switchGuideTab('sa');
-  } else if (targetTab === 'sharing') {
-    switchGuideTab('sharing');
-  } else if (targetTab === 'root_folder') {
-    switchGuideTab('folder');
-  } else if (targetTab === 'oauth_user') {
-    switchGuideTab('oauth');
-  } else {
-    switchGuideTab('sa');
-  }
+  // Switch to the requested provider tab
+  switchMainStorageTab(provider || 'gdrive');
 }
 
-function closeGdriveGuideModal() {
-  const modal = document.getElementById('modal-gdrive-guide');
+// Close Modal
+function closeStorageGuideModal() {
+  const modal = document.getElementById('modal-storage-guide');
   if (modal) {
     modal.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
   }
 }
 
-// Switch tabs inside the guide modal
-function switchGuideTab(tabId) {
-  const tabIds = ['sa', 'sharing', 'folder', 'oauth', 'faq'];
-  tabIds.forEach(id => {
-    const content = document.getElementById(`guide-tab-${id}`);
-    const btn = document.getElementById(`tab-btn-${id}`);
+// Switch provider tab inside the guide modal
+function switchMainStorageTab(providerId) {
+  const providers = ['gdrive', 'onedrive', 's3', 'local'];
+  providers.forEach(p => {
+    const content = document.getElementById(`content-provider-${p}`);
+    const btn = document.getElementById(`tab-btn-${p}`);
     if (content) {
-      if (id === tabId) content.classList.remove('hidden');
+      if (p === providerId) content.classList.remove('hidden');
       else content.classList.add('hidden');
     }
     if (btn) {
-      if (id === tabId) {
+      if (p === providerId) {
         btn.classList.add('border-blue-600', 'text-blue-600', 'font-bold');
         btn.classList.remove('border-transparent', 'text-gray-500');
       } else {
@@ -667,7 +792,7 @@ function switchGuideTab(tabId) {
 // Close modal on Escape key press
 document.addEventListener('keydown', function(event) {
   if (event.key === 'Escape') {
-    closeGdriveGuideModal();
+    closeStorageGuideModal();
   }
 });
 

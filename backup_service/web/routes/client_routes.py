@@ -72,6 +72,33 @@ async def create_client(
     return RedirectResponse(url="/clients", status_code=303)
 
 
+@router.post("/clients/{client_id}/edit")
+async def edit_client(
+    client_id: int,
+    request: Request,
+    user: dict = Depends(require_auth),
+    display_name: str = Form(...),
+    retention_days: int = Form(10),
+    storage_config_id: Optional[str] = Form(None)
+):
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    storage_id = int(storage_config_id) if storage_config_id and storage_config_id.strip() else None
+    db.update_client(client_id, display_name.strip(), retention_days, storage_id)
+
+    request.app.state.audit_logger.log(
+        action="UPDATE_CLIENT",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="client",
+        resource_id=str(client_id),
+        details={"name": display_name, "retention_days": retention_days, "storage_config_id": storage_id}
+    )
+    return RedirectResponse(url="/clients", status_code=303)
+
+
 @router.post("/clients/{client_id}/servers/add")
 async def add_server(
     client_id: int,

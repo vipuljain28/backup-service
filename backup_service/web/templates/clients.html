@@ -204,9 +204,12 @@
             <span class="font-mono text-xs px-2.5 py-0.5 rounded bg-gray-100 text-gray-700 font-semibold">ID: {{ c.client_id }}</span>
             <span class="text-xs px-2.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">{{ c.retention_days }} Days Retention</span>
           </div>
-          <p class="text-xs text-gray-500 mt-1">Storage Destination: <strong>{{ c.storage_name or 'Default Local Storage' }}</strong></p>
+          <p class="text-xs text-gray-500 mt-1">Storage Destination: <strong class="text-blue-700 font-semibold">{{ c.storage_name or 'Default Local Storage' }}</strong></p>
         </div>
-        <div class="mt-4 md:mt-0 flex space-x-2">
+        <div class="mt-4 md:mt-0 flex flex-wrap gap-2">
+          <button onclick="openEditClientModal({{ c.id }}, '{{ c.display_name }}', {{ c.retention_days }}, '{{ c.storage_config_id or '' }}')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-md border border-blue-200 flex items-center space-x-1" title="Change Cloud Destination or Retention Policy">
+            <span>⚙️ Edit Cloud Target</span>
+          </button>
           <button onclick="openServerModal({{ c.id }})" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-md border border-gray-300">
             + Add Server Connection
           </button>
@@ -1094,5 +1097,53 @@ ${data.message || data.detail || 'Connection error'}`);
     btn.innerText = orig;
   }
 }
+
+function openEditClientModal(clientId, displayName, retentionDays, storageConfigId) {
+  const form = document.getElementById('form-edit-client');
+  form.action = `/clients/${clientId}/edit`;
+  document.getElementById('edit-client-name').value = displayName;
+  document.getElementById('edit-client-retention').value = retentionDays;
+  document.getElementById('edit-client-storage').value = storageConfigId || "";
+  document.getElementById('modal-edit-client').classList.remove('hidden');
+}
+
 </script>
+
+<!-- Modal: Edit Client Settings & Storage Cloud Destination -->
+<div id="modal-edit-client" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+    <div class="flex justify-between items-center pb-2 border-b border-gray-200">
+      <div>
+        <h3 class="text-base font-bold text-gray-900">Edit Client Tenant &amp; Cloud Target</h3>
+        <p class="text-xs text-gray-500">Configure which cloud gateway and retention policy to apply.</p>
+      </div>
+      <button onclick="document.getElementById('modal-edit-client').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+    </div>
+    <form id="form-edit-client" method="POST" class="space-y-4">
+      <div>
+        <label class="block font-medium text-gray-700 text-xs uppercase mb-1">Client Display Name *</label>
+        <input type="text" id="edit-client-name" name="display_name" required class="block w-full border rounded-md px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block font-medium text-gray-700 text-xs uppercase mb-1">Retention Window (Days) *</label>
+        <input type="number" id="edit-client-retention" name="retention_days" required min="1" max="365" class="block w-full border rounded-md px-3 py-2 text-sm font-mono">
+      </div>
+      <div>
+        <label class="block font-medium text-gray-700 text-xs uppercase mb-1">Cloud Storage Destination *</label>
+        <select id="edit-client-storage" name="storage_config_id" class="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white font-medium">
+          <option value="">Default Local Storage (./local_cloud_backup)</option>
+          {% for sc in storage_configs %}
+          <option value="{{ sc.id }}">{{ sc.name }} ({{ sc.provider_type|upper }})</option>
+          {% endfor %}
+        </select>
+        <p class="text-[11px] text-gray-500 mt-1">Select which cloud gateway (Google Drive, OneDrive, S3, or Local NAS) will store this client's backups.</p>
+      </div>
+      <div class="flex justify-end space-x-2 pt-4 border-t">
+        <button type="button" onclick="document.getElementById('modal-edit-client').classList.add('hidden')" class="px-4 py-2 border rounded-md text-xs font-semibold text-gray-700">Cancel</button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}

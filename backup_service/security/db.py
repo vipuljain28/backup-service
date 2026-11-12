@@ -334,6 +334,19 @@ class DatabaseManager:
             )
             return cur.lastrowid
 
+    def update_client(self, client_id_num: int, display_name: str, retention_days: int = 10, storage_config_id: Optional[int] = None) -> bool:
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.connection() as conn:
+            cur = conn.execute(
+                """
+                UPDATE clients
+                SET display_name = ?, retention_days = ?, storage_config_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (display_name, retention_days, storage_config_id, now_iso, client_id_num)
+            )
+            return cur.rowcount > 0
+
     def add_server_connection(self, client_id: int, name: str, mode: str, host: str, port: int, username: str, auth_type: str, encrypted_secret: str) -> int:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with self.connection() as conn:

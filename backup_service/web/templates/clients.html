@@ -47,26 +47,127 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <!-- Sub-Panel: Servers -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-          <h4 class="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">Server Connections</h4>
-          <div id="servers-list-{{ c.id }}" class="text-xs space-y-2">
-            <p class="text-gray-400 italic">Click "+ Add Server Connection" to configure Local or SSH server.</p>
+        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center space-x-1.5">
+                <span>🖥️ Server Connections</span>
+                <span class="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">{{ c.servers|length }}</span>
+              </h4>
+              <button onclick="openServerModal({{ c.id }})" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                + Add
+              </button>
+            </div>
+            <div class="space-y-2">
+              {% for s in c.servers %}
+              <div class="p-3 bg-white rounded-lg border border-gray-200 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-gray-900 text-xs">{{ s.name }}</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase {% if s.mode == 'ssh' %}bg-purple-100 text-purple-800{% else %}bg-green-100 text-green-800{% endif %}">
+                    {{ s.mode }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-gray-500 font-mono">
+                  {% if s.mode == 'ssh' %}
+                    <span>{{ s.username }}@{{ s.host }}:{{ s.port }}</span>
+                  {% else %}
+                    <span>Local Server Process</span>
+                  {% endif %}
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-gray-100 text-[11px]">
+                  <span class="text-gray-400">Auth: {{ s.auth_type }}</span>
+                  <div class="flex items-center space-x-2">
+                    <button onclick="testServerConnection({{ s.id }}, this)" class="text-blue-600 hover:text-blue-800 hover:underline font-semibold">
+                      Test Ping
+                    </button>
+                    <form method="POST" action="/clients/{{ c.id }}/servers/{{ s.id }}/delete" onsubmit="return confirm('Delete server connection {{ s.name }}?');" class="inline">
+                      <button type="submit" class="text-red-500 hover:text-red-700 hover:underline text-[10px]">
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              {% else %}
+              <div class="p-4 text-center border border-dashed border-gray-300 rounded-lg text-gray-400 text-xs">
+                <p>No servers configured.</p>
+                <button onclick="openServerModal({{ c.id }})" class="mt-1 text-blue-600 underline font-semibold">+ Add Server Connection</button>
+              </div>
+              {% endfor %}
+            </div>
           </div>
         </div>
 
         <!-- Sub-Panel: Databases -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-          <h4 class="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">Database Targets (with SSL)</h4>
-          <div id="dbs-list-{{ c.id }}" class="text-xs space-y-2">
-            <p class="text-gray-400 italic">No databases configured. Add MySQL, MariaDB, or PostgreSQL.</p>
+        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center space-x-1.5">
+                <span>🗄️ Database Targets</span>
+                <span class="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">{{ c.databases|length }}</span>
+              </h4>
+              <button onclick="openDbModal({{ c.id }})" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                + Add
+              </button>
+            </div>
+            <div class="space-y-2">
+              {% for db in c.databases %}
+              <div class="p-3 bg-white rounded-lg border border-gray-200 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-gray-900 text-xs">{{ db.name }}</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800">
+                    {{ db.engine }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-gray-500 font-mono">
+                  DB: <strong>{{ db.db_name }}</strong> ({{ db.host }}:{{ db.port }})
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-gray-100 text-[11px]">
+                  <span class="{% if db.ssl_enabled %}text-green-600 font-semibold{% else %}text-gray-400{% endif %}">
+                    {% if db.ssl_enabled %}🔒 SSL Enabled{% else %}Standard Socket{% endif %}
+                  </span>
+                </div>
+              </div>
+              {% else %}
+              <div class="p-4 text-center border border-dashed border-gray-300 rounded-lg text-gray-400 text-xs">
+                <p>No databases configured.</p>
+                <button onclick="openDbModal({{ c.id }})" class="mt-1 text-blue-600 underline font-semibold">+ Add Database Target</button>
+              </div>
+              {% endfor %}
+            </div>
           </div>
         </div>
 
         <!-- Sub-Panel: Folders -->
-        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-          <h4 class="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">Folder Sources (Directory Explorer)</h4>
-          <div id="folders-list-{{ c.id }}" class="text-xs space-y-2">
-            <p class="text-gray-400 italic">No folders configured. Add paths using Directory Browser.</p>
+        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center space-x-1.5">
+                <span>📁 Folder Sources</span>
+                <span class="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">{{ c.folders|length }}</span>
+              </h4>
+              <button onclick="openFolderModal({{ c.id }})" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                + Add
+              </button>
+            </div>
+            <div class="space-y-2">
+              {% for f in c.folders %}
+              <div class="p-3 bg-white rounded-lg border border-gray-200 shadow-xs space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-gray-900 text-xs font-mono">{{ f.source_slug }}</span>
+                  <span class="text-[10px] text-gray-400 font-semibold">Folder</span>
+                </div>
+                <div class="text-[11px] text-gray-600 font-mono truncate" title="{{ f.absolute_path }}">
+                  {{ f.absolute_path }}
+                </div>
+              </div>
+              {% else %}
+              <div class="p-4 text-center border border-dashed border-gray-300 rounded-lg text-gray-400 text-xs">
+                <p>No folders configured.</p>
+                <button onclick="openFolderModal({{ c.id }})" class="mt-1 text-blue-600 underline font-semibold">+ Add Folder Source</button>
+              </div>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </div>
@@ -185,7 +286,11 @@
       <button onclick="document.getElementById('modal-add-db').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">&times;</button>
     </div>
     <form id="form-add-db" method="POST" action="" class="space-y-4 text-sm">
-      <input type="hidden" name="server_id" value="1">
+      <div>
+        <label class="block font-medium text-gray-700">Target Server Connection</label>
+        <select id="db-server-select" name="server_id" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white font-medium focus:ring-blue-500 focus:border-blue-500">
+        </select>
+      </div>
       <div>
         <label class="block font-medium text-gray-700">Database Label</label>
         <input type="text" name="name" required placeholder="e.g. Star Main Calibration DB" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
@@ -247,7 +352,11 @@
       <button onclick="document.getElementById('modal-add-folder').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">&times;</button>
     </div>
     <form id="form-add-folder" method="POST" action="" class="space-y-4 text-sm">
-      <input type="hidden" name="server_id" value="1">
+      <div>
+        <label class="block font-medium text-gray-700">Target Server Connection</label>
+        <select id="folder-server-select" name="server_id" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white font-medium focus:ring-blue-500 focus:border-blue-500" onchange="openDirectoryBrowser('/')">
+        </select>
+      </div>
       <div>
         <label class="block font-medium text-gray-700">Folder Slug (Identifier)</label>
         <input type="text" name="source_slug" required placeholder="e.g. calibration_data" class="mt-1 block w-full border rounded-md px-3 py-2 text-sm">
@@ -291,6 +400,7 @@
 <script>
 let activeClientId = null;
 let currentBrowserPath = "/";
+const clientsData = {{ clients|tojson }};
 
 function openServerModal(clientId) {
   activeClientId = clientId;
@@ -301,12 +411,44 @@ function openServerModal(clientId) {
 function openDbModal(clientId) {
   activeClientId = clientId;
   document.getElementById('form-add-db').action = `/clients/${clientId}/databases/add`;
+  const client = clientsData.find(c => c.id === clientId);
+  const select = document.getElementById('db-server-select');
+  select.innerHTML = '';
+  if (client && client.servers && client.servers.length > 0) {
+    client.servers.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.innerText = `${s.name} (${s.mode.toUpperCase()}${s.mode === 'ssh' ? ' - ' + s.host : ''})`;
+      select.appendChild(opt);
+    });
+  } else {
+    const opt = document.createElement('option');
+    opt.value = "";
+    opt.innerText = "No servers configured (Add Server Connection first)";
+    select.appendChild(opt);
+  }
   document.getElementById('modal-add-db').classList.remove('hidden');
 }
 
 function openFolderModal(clientId) {
   activeClientId = clientId;
   document.getElementById('form-add-folder').action = `/clients/${clientId}/folders/add`;
+  const client = clientsData.find(c => c.id === clientId);
+  const select = document.getElementById('folder-server-select');
+  select.innerHTML = '';
+  if (client && client.servers && client.servers.length > 0) {
+    client.servers.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.innerText = `${s.name} (${s.mode.toUpperCase()}${s.mode === 'ssh' ? ' - ' + s.host : ''})`;
+      select.appendChild(opt);
+    });
+  } else {
+    const opt = document.createElement('option');
+    opt.value = "";
+    opt.innerText = "No servers configured (Add Server Connection first)";
+    select.appendChild(opt);
+  }
   document.getElementById('modal-add-folder').classList.remove('hidden');
 }
 
@@ -319,34 +461,60 @@ function toggleServerMode(mode) {
   }
 }
 
+async function testServerConnection(serverId, btn) {
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="animate-pulse">Pinging...</span>';
+  try {
+    const res = await fetch(`/api/v1/servers/${serverId}/test`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert(`✅ Server Connection Verified:\n${data.message}`);
+    } else {
+      alert(`❌ Server Connection Failed:\n${data.message || data.detail || 'Connection test failed'}`);
+    }
+  } catch (err) {
+    alert(`❌ Network Error: ${err.message}`);
+  } finally {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
+
 async function openDirectoryBrowser(path = "/") {
   const panel = document.getElementById('dir-browser-panel');
   panel.classList.remove('hidden');
   currentBrowserPath = path;
 
-  // Use local server (id 1 or first available)
-  const resp = await fetch(`/api/v1/servers/1/browse?path=${encodeURIComponent(path)}`);
-  const data = await resp.json();
+  const serverSelect = document.getElementById('folder-server-select');
+  const serverId = serverSelect && serverSelect.value ? serverSelect.value : 1;
 
-  document.getElementById('browser-current-path').innerText = data.current_path;
-  const container = document.getElementById('browser-items-container');
-  container.innerHTML = "";
+  try {
+    const resp = await fetch(`/api/v1/servers/${serverId}/browse?path=${encodeURIComponent(path)}`);
+    const data = await resp.json();
 
-  if (data.items && data.items.length > 0) {
-    data.items.forEach(item => {
-      if (item.is_dir) {
-        const row = document.createElement('div');
-        row.className = "flex items-center justify-between p-1.5 hover:bg-blue-50 rounded cursor-pointer";
-        row.innerHTML = `
-          <span class="font-semibold text-gray-800" onclick="openDirectoryBrowser('${item.path}')">&diams; ${item.name}</span>
-          <button type="button" class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                  onclick="selectFolder('${item.path}')">Select</button>
-        `;
-        container.appendChild(row);
-      }
-    });
-  } else {
-    container.innerHTML = "<p class='text-gray-400 p-2'>No accessible subdirectories.</p>";
+    document.getElementById('browser-current-path').innerText = data.current_path || path;
+    const container = document.getElementById('browser-items-container');
+    container.innerHTML = "";
+
+    if (data.items && data.items.length > 0) {
+      data.items.forEach(item => {
+        if (item.is_dir) {
+          const row = document.createElement('div');
+          row.className = "flex items-center justify-between p-1.5 hover:bg-blue-50 rounded cursor-pointer";
+          row.innerHTML = `
+            <span class="font-semibold text-gray-800" onclick="openDirectoryBrowser('${item.path.replace(/\\/g, '/')}')">&diams; ${item.name}</span>
+            <button type="button" class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                    onclick="selectFolder('${item.path.replace(/\\/g, '/')}')">Select</button>
+          `;
+          container.appendChild(row);
+        }
+      });
+    } else {
+      container.innerHTML = "<p class='text-gray-400 p-2'>No accessible subdirectories.</p>";
+    }
+  } catch (err) {
+    document.getElementById('browser-items-container').innerHTML = `<p class='text-red-500 p-2'>Error exploring server: ${err.message}</p>`;
   }
 }
 

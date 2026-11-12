@@ -252,7 +252,14 @@ class DatabaseManager:
                 ORDER BY c.id ASC
                 """
             )
-            return [dict(row) for row in cur.fetchall()]
+            clients = [dict(row) for row in cur.fetchall()]
+            for c in clients:
+                cid = c["id"]
+                c["servers"] = [dict(r) for r in conn.execute("SELECT * FROM server_connections WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
+                c["databases"] = [dict(r) for r in conn.execute("SELECT * FROM database_targets WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
+                c["folders"] = [dict(r) for r in conn.execute("SELECT * FROM folder_sources WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
+                c["schedules"] = [dict(r) for r in conn.execute("SELECT * FROM backup_schedules WHERE client_id = ? ORDER BY id ASC", (cid,)).fetchall()]
+            return clients
 
     def get_client(self, client_id_num: int) -> Optional[Dict[str, Any]]:
         with self.connection() as conn:

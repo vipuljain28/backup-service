@@ -197,3 +197,89 @@ async def add_folder(
         details={"client_id": client_id, "path": absolute_path}
     )
     return RedirectResponse(url="/clients", status_code=303)
+
+
+@router.post("/api/v1/servers/{server_id}/test")
+async def test_server_connection(server_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Test connectivity for a configured server connection (Local process or SSH handshake)."""
+    db = request.app.state.db_manager
+    vault = request.app.state.vault
+
+    with db.connection() as conn:
+        row = conn.execute("SELECT * FROM server_connections WHERE id = ?", (server_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Server connection not found")
+        server = dict(row)
+
+    if server["mode"] == "local":
+        return {
+            "success": True,
+            "server_id": server_id,
+            "mode": "local",
+            "message": "Local server execution environment is active and ready."
+        }
+
+    try:
+        from backup_service.config.settings import SSHConfig
+        from backup_service.drivers.ssh_driver import SSHDriver
+
+        decrypted_secret = vault.decrypt(server["encrypted_secret"]) if server["encrypted_secret"] else None
+        key_path = None
+        password = None
+
+        if server["auth_type"] == "password":
+            password = decrypted_secret
+        else:
+            key_path = decrypted_secret
+
+        ssh_cfg = SSHConfig(
+            host=server["host"],
+            port=server["port"] or 22,
+            user=server["username"],
+            key_path=key_path,
+            password=password,
+            timeout_seconds=10
+        )
+
+        driver = SSHDriver(ssh_cfg)
+        client = driver._get_client()
+        stdin, stdout, stderr = client.exec_command("uname -a || ver", timeout=5)
+        out = stdout.read().decode("utf-8", errors="ignore").strip()
+        driver.close()
+
+        return {
+            "success": True,
+            "server_id": server_id,
+            "mode": "ssh",
+            "host": f"{server['username']}@{server['host']}:{server['port']}",
+            "message": f"SSH connection verified successfully! Remote Host: {out[:100]}"
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "server_id": server_id,
+            "mode": "ssh",
+            "host": f"{server['username']}@{server['host']}:{server['port']}",
+            "message": f"SSH Connection Failed: {str(exc)}"
+        }
+
+
+@router.post("/clients/{client_id}/servers/{server_id}/delete")
+async def delete_server(client_id: int, server_id: int, request: Request, user: dict = Depends(require_auth)):
+    """Delete a server connection from a client."""
+    if user.get("role") == Role.AUDITOR:
+        raise HTTPException(status_code=403, detail="Auditor role is read-only")
+
+    db = request.app.state.db_manager
+    with db.connection() as conn:
+        conn.execute("DELETE FROM server_connections WHERE id = ? AND client_id = ?", (server_id, client_id))
+
+    request.app.state.audit_logger.log(
+        action="DELETE_SERVER",
+        user_id=user["id"],
+        username=user["username"],
+        resource_type="server_connection",
+        resource_id=str(server_id),
+        details={"client_id": client_id}
+    )
+    return RedirectResponse(url="/clients", status_code=303)
